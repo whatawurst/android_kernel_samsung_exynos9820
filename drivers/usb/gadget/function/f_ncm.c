@@ -1821,6 +1821,8 @@ static void ncm_unbind(struct usb_configuration *c, struct usb_function *f)
 #endif
 	DBG(c->cdev, "ncm unbind\n");
 
+	opts->bound = false;
+
 	ncm_string_defs[0].id = 0;
 	usb_free_all_descriptors(f);
 
