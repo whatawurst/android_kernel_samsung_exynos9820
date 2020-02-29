@@ -19,6 +19,7 @@
 
 #include <linux/cpu.h>
 #include <linux/cpufreq.h>
+#include <linux/cpufreq_times.h>
 #include <linux/delay.h>
 #include <linux/device.h>
 #include <linux/init.h>
@@ -29,9 +30,12 @@
 #include <linux/suspend.h>
 #include <linux/syscore_ops.h>
 #include <linux/tick.h>
+#include <linux/ologk.h>
 #include <trace/events/power.h>
 
 static LIST_HEAD(cpufreq_policy_list);
+
+struct cpufreq_user_policy core_min_max_policy[NR_CPUS];
 
 static inline bool policy_is_inactive(struct cpufreq_policy *policy)
 {
@@ -339,6 +343,7 @@ static void __cpufreq_notify_transition(struct cpufreq_policy *policy,
 			 (unsigned long)freqs->new, (unsigned long)freqs->cpu);
 		trace_cpu_frequency(freqs->new, freqs->cpu);
 		cpufreq_stats_record_transition(policy, freqs->new);
+		cpufreq_times_record_transition(policy, freqs->new);
 		srcu_notifier_call_chain(&cpufreq_transition_notifier_list,
 				CPUFREQ_POSTCHANGE, freqs);
 		if (likely(policy) && likely(policy->cpu == freqs->cpu))
@@ -1168,6 +1173,43 @@ static void cpufreq_policy_free(struct cpufreq_policy *policy)
 	kfree(policy);
 }
 
+int cpufreq_fast_online(void)
+{
+	int cpu, ret;
+	struct cpufreq_policy *policy;
+	struct cpumask cl_online_mask;
+
+	for_each_cpu(cpu, &cpu_faston_mask) {
+		policy = per_cpu(cpufreq_cpu_data, cpu);
+		if (!policy)
+			panic("%s: can't to get policy\n", __func__);
+
+		WARN_ON(!cpumask_test_cpu(cpu, policy->related_cpus));
+		down_write(&policy->rwsem);
+
+		if (cpumask_test_cpu(cpu, policy->cpus)) {
+			up_write(&policy->rwsem);
+			continue;
+		}
+
+
+		if (!policy_is_inactive(policy))
+			cpufreq_stop_governor(policy);
+
+		cpumask_and(&cl_online_mask, &cpu_faston_mask, policy->related_cpus);
+		cpumask_or(policy->cpus, &cl_online_mask, policy->cpus);
+
+		policy->cpu = cpumask_first(policy->cpus);
+		ret = cpufreq_start_governor(policy);
+		if (ret)
+			panic("%s: Failed to start governor\n", __func__);
+
+		up_write(&policy->rwsem);
+	}
+
+	return 0;
+}
+
 static int cpufreq_online(unsigned int cpu)
 {
 	struct cpufreq_policy *policy;
@@ -1175,6 +1217,11 @@ static int cpufreq_online(unsigned int cpu)
 	unsigned long flags;
 	unsigned int j;
 	int ret;
+
+	if (cpumask_test_cpu(cpu, &cpu_faston_mask)) {
+		cpufreq_fast_online();
+		return 0;
+	}
 
 	pr_debug("%s: bringing CPU%u online\n", __func__, cpu);
 
@@ -1289,6 +1336,7 @@ static int cpufreq_online(unsigned int cpu)
 			goto out_exit_policy;
 
 		cpufreq_stats_create_table(policy);
+		cpufreq_times_create_policy(policy);
 
 		write_lock_irqsave(&cpufreq_driver_lock, flags);
 		list_add(&policy->policy_list, &cpufreq_policy_list);
@@ -1357,10 +1405,44 @@ static int cpufreq_add_dev(struct device *dev, struct subsys_interface *sif)
 	return 0;
 }
 
+int cpufreq_fast_offline(void)
+{
+	int cpu, ret;
+	struct cpufreq_policy *policy;
+
+	for_each_cpu(cpu, &cpu_fastoff_mask) {
+		policy = per_cpu(cpufreq_cpu_data, cpu);
+		down_write(&policy->rwsem);
+		if (!cpumask_test_cpu(cpu, policy->cpus)) {
+			up_write(&policy->rwsem);
+			continue;
+		}
+
+		cpufreq_stop_governor(policy);
+
+		cpumask_andnot(policy->cpus, policy->cpus, &cpu_fastoff_mask);
+
+		if (!policy_is_inactive(policy)) {
+			policy->cpu = cpumask_first(policy->cpus);
+			ret = cpufreq_start_governor(policy);
+			if (ret)
+				panic("%s: Failed to start governor\n", __func__);
+		}
+		up_write(&policy->rwsem);
+	}
+
+	return 0;
+}
+
 static int cpufreq_offline(unsigned int cpu)
 {
 	struct cpufreq_policy *policy;
 	int ret;
+
+	if (cpumask_test_cpu(cpu, &cpu_fastoff_mask)) {
+		cpufreq_fast_offline();
+		return 0;
+	}
 
 	pr_debug("%s: unregistering CPU %u\n", __func__, cpu);
 
@@ -1454,7 +1536,12 @@ static void cpufreq_remove_dev(struct device *dev, struct subsys_interface *sif)
 static void cpufreq_out_of_sync(struct cpufreq_policy *policy,
 				unsigned int new_freq)
 {
+	unsigned int cur_freq = cpufreq_driver->get(policy->cpu);
 	struct cpufreq_freqs freqs;
+
+	/* False alarm: policy->cur updated appropriately */
+	if (cur_freq == policy->cur)
+		return;
 
 	pr_debug("Warning: CPU frequency out of sync: cpufreq and timing core thinks of %u, is %u kHz\n",
 		 policy->cur, new_freq);
@@ -1464,6 +1551,11 @@ static void cpufreq_out_of_sync(struct cpufreq_policy *policy,
 
 	cpufreq_freq_transition_begin(policy, &freqs);
 	cpufreq_freq_transition_end(policy, &freqs, 0);
+
+	cur_freq = cpufreq_driver->get(policy->cpu);
+
+	if (cur_freq != policy->cur)
+		pr_debug("Warning: CPU frequency stays unsynced even after trial\n");
 }
 
 /**
@@ -1849,9 +1941,14 @@ EXPORT_SYMBOL(cpufreq_unregister_notifier);
 unsigned int cpufreq_driver_fast_switch(struct cpufreq_policy *policy,
 					unsigned int target_freq)
 {
+	int ret;
 	target_freq = clamp_val(target_freq, policy->min, policy->max);
 
-	return cpufreq_driver->fast_switch(policy, target_freq);
+        ret = cpufreq_driver->fast_switch(policy, target_freq);
+	if (ret)
+		cpufreq_times_record_transition(policy, ret);
+
+	return ret;
 }
 EXPORT_SYMBOL_GPL(cpufreq_driver_fast_switch);
 
@@ -1938,7 +2035,7 @@ static int __target_index(struct cpufreq_policy *policy, int index)
 	return retval;
 }
 
-int __cpufreq_driver_target(struct cpufreq_policy *policy,
+int __weak __cpufreq_driver_target(struct cpufreq_policy *policy,
 			    unsigned int target_freq,
 			    unsigned int relation)
 {
@@ -2231,6 +2328,19 @@ static int cpufreq_set_policy(struct cpufreq_policy *policy,
 	policy->min = new_policy->min;
 	policy->max = new_policy->max;
 
+	arch_set_max_freq_scale(policy->cpus, policy->max);
+
+	trace_cpu_frequency_limits(policy->max, policy->min, policy->cpu);
+	if(policy->cpu < NR_CPUS) {
+		if(/*core_min_max_policy[policy->cpu].min != policy->min ||*/ core_min_max_policy[policy->cpu].max != policy->max) {
+			if(policy->max < OLOG_CPU_FREQ_FILTER || core_min_max_policy[policy->cpu].max < OLOG_CPU_FREQ_FILTER) {
+				perflog(PERFLOG_CPUFREQ, "[%d] %lu, %lu", policy->cpu, policy->min / 1000, policy->max / 1000);
+			}
+			core_min_max_policy[policy->cpu].min = policy->min;
+			core_min_max_policy[policy->cpu].max = policy->max;
+		}
+	}
+
 	policy->cached_target_freq = UINT_MAX;
 
 	pr_debug("new min and max freqs are %u - %u kHz\n",
@@ -2427,6 +2537,23 @@ int cpufreq_boost_enabled(void)
 	return cpufreq_driver->boost_enabled;
 }
 EXPORT_SYMBOL_GPL(cpufreq_boost_enabled);
+
+/*********************************************************************
+ *               FREQUENCY INVARIANT ACCOUNTING SUPPORT              *
+ *********************************************************************/
+
+__weak void arch_set_freq_scale(struct cpumask *cpus,
+				unsigned long cur_freq,
+				unsigned long max_freq)
+{
+}
+EXPORT_SYMBOL_GPL(arch_set_freq_scale);
+
+__weak void arch_set_max_freq_scale(struct cpumask *cpus,
+				    unsigned long policy_max_freq)
+{
+}
+EXPORT_SYMBOL_GPL(arch_set_max_freq_scale);
 
 /*********************************************************************
  *               REGISTER / UNREGISTER CPUFREQ DRIVER                *
