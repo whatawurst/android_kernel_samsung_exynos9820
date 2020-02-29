@@ -25,9 +25,17 @@
 #include <linux/slab.h>
 #include <linux/filter.h>
 #include <linux/compiler.h>
+#if defined(CONFIG_SEC_DEBUG)
+#include <linux/sec_debug.h>
+#endif
 
 #include <asm/sections.h>
 
+#ifdef CONFIG_KALLSYMS_ALL
+#define all_var 1
+#else
+#define all_var 0
+#endif
 /*
  * These will be re-linked against their real values
  * during the second link stage.
@@ -50,6 +58,38 @@ extern const u8 kallsyms_token_table[] __weak;
 extern const u16 kallsyms_token_index[] __weak;
 
 extern const unsigned long kallsyms_markers[] __weak;
+
+#if defined(CONFIG_SEC_DEBUG)
+void sec_debug_set_kallsyms_info(struct sec_debug_ksyms *ksyms, int magic)
+{
+	if (!IS_ENABLED(CONFIG_KALLSYMS_BASE_RELATIVE)) {
+		ksyms->addresses_pa = __pa(kallsyms_addresses);
+		ksyms->relative_base = 0x0;
+		ksyms->offsets_pa = 0x0;
+	} else {
+		ksyms->addresses_pa = 0x0;
+		ksyms->relative_base = (uint64_t)kallsyms_relative_base;
+		ksyms->offsets_pa = __pa(kallsyms_offsets);
+	}
+
+	ksyms->names_pa = __pa(kallsyms_names);
+	ksyms->num_syms = kallsyms_num_syms;
+	ksyms->token_table_pa = __pa(kallsyms_token_table);
+	ksyms->token_index_pa = __pa(kallsyms_token_index);
+	ksyms->markers_pa = __pa(kallsyms_markers);
+
+	ksyms->sect.sinittext = (uint64_t)_sinittext;
+	ksyms->sect.einittext = (uint64_t)_einittext;
+	ksyms->sect.stext = (uint64_t)_stext;
+	ksyms->sect.etext = (uint64_t)_etext;
+	ksyms->sect.end = (uint64_t)_end;
+
+	ksyms->kallsyms_all = all_var;
+
+	ksyms->magic = magic;
+	ksyms->kimage_voffset = kimage_voffset;
+}
+#endif
 
 static inline int is_kernel_inittext(unsigned long addr)
 {
@@ -302,6 +342,24 @@ int kallsyms_lookup_size_offset(unsigned long addr, unsigned long *symbolsize,
 	       !!__bpf_address_lookup(addr, symbolsize, offset, namebuf);
 }
 
+#ifdef CONFIG_CFI_CLANG
+/*
+ * LLVM appends .cfi to function names when CONFIG_CFI_CLANG is enabled,
+ * which causes confusion and potentially breaks user space tools, so we
+ * will strip the postfix from expanded symbol names.
+ */
+static inline void cleanup_symbol_name(char *s)
+{
+	char *res;
+
+	res = strrchr(s, '.');
+	if (res && !strcmp(res, ".cfi"))
+		*res = '\0';
+}
+#else
+static inline void cleanup_symbol_name(char *s) {}
+#endif
+
 /*
  * Lookup an address
  * - modname is set to NULL if it's in the kernel.
@@ -328,7 +386,9 @@ const char *kallsyms_lookup(unsigned long addr,
 				       namebuf, KSYM_NAME_LEN);
 		if (modname)
 			*modname = NULL;
-		return namebuf;
+
+		ret = namebuf;
+		goto found;
 	}
 
 	/* See if it's in a module or a BPF JITed image. */
@@ -337,11 +397,16 @@ const char *kallsyms_lookup(unsigned long addr,
 	if (!ret)
 		ret = bpf_address_lookup(addr, symbolsize,
 					 offset, modname, namebuf);
+
+found:
+	cleanup_symbol_name(namebuf);
 	return ret;
 }
 
 int lookup_symbol_name(unsigned long addr, char *symname)
 {
+	int res;
+
 	symname[0] = '\0';
 	symname[KSYM_NAME_LEN - 1] = '\0';
 
@@ -352,15 +417,23 @@ int lookup_symbol_name(unsigned long addr, char *symname)
 		/* Grab name */
 		kallsyms_expand_symbol(get_symbol_offset(pos),
 				       symname, KSYM_NAME_LEN);
-		return 0;
+		goto found;
 	}
 	/* See if it's in a module. */
-	return lookup_module_symbol_name(addr, symname);
+	res = lookup_module_symbol_name(addr, symname);
+	if (res)
+		return res;
+
+found:
+	cleanup_symbol_name(symname);
+	return 0;
 }
 
 int lookup_symbol_attrs(unsigned long addr, unsigned long *size,
 			unsigned long *offset, char *modname, char *name)
 {
+	int res;
+
 	name[0] = '\0';
 	name[KSYM_NAME_LEN - 1] = '\0';
 
@@ -372,10 +445,16 @@ int lookup_symbol_attrs(unsigned long addr, unsigned long *size,
 		kallsyms_expand_symbol(get_symbol_offset(pos),
 				       name, KSYM_NAME_LEN);
 		modname[0] = '\0';
-		return 0;
+		goto found;
 	}
 	/* See if it's in a module. */
-	return lookup_module_symbol_attrs(addr, size, offset, modname, name);
+	res = lookup_module_symbol_attrs(addr, size, offset, modname, name);
+	if (res)
+		return res;
+
+found:
+	cleanup_symbol_name(name);
+	return 0;
 }
 
 /* Look up a kernel symbol and return it in a text buffer. */
