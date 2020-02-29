@@ -47,7 +47,7 @@
 
 /* These are for everybody (although not all archs will actually
    discard it in modules) */
-#define __init		__section(.init.text) __cold __inittrace __latent_entropy __noinitretpoline
+#define __init		__section(.init.text) __cold __inittrace __latent_entropy __noinitretpoline __nocfi
 #define __initdata	__section(.init.data)
 #define __initconst	__section(.init.rodata)
 #define __exitdata	__section(.exit.data)
@@ -153,6 +153,15 @@ extern bool initcall_debug;
 
 #ifndef __ASSEMBLY__
 
+#ifdef CONFIG_LTO_CLANG
+  /* prepend the variable name with __COUNTER__ to ensure correct ordering */
+  #define ___initcall_name2(c, fn, id) 	__initcall_##c##_##fn##id
+  #define ___initcall_name1(c, fn, id)	___initcall_name2(c, fn, id)
+  #define __initcall_name(fn, id) 	___initcall_name1(__COUNTER__, fn, id)
+#else
+  #define __initcall_name(fn, id) 	__initcall_##fn##id
+#endif
+
 /*
  * initcalls are now grouped by functionality into separate
  * subsections. Ordering inside the subsections is determined
@@ -170,7 +179,7 @@ extern bool initcall_debug;
  */
 
 #define __define_initcall(fn, id) \
-	static initcall_t __initcall_##fn##id __used \
+	static initcall_t __initcall_name(fn, id) __used \
 	__attribute__((__section__(".initcall" #id ".init"))) = fn;
 
 /*
@@ -217,6 +226,12 @@ extern bool initcall_debug;
 #define security_initcall(fn)					\
 	static initcall_t __initcall_##fn			\
 	__used __section(.security_initcall.init) = fn
+
+#ifdef CONFIG_DEFERRED_INITCALLS
+#define deferred_initcall(fn, id) \
+	static initcall_t __initcall_##fn##id __used \
+	__attribute__((__section__(".deferred_initcall" #id ".init"))) = fn
+#endif
 
 struct obs_kernel_param {
 	const char *str;
@@ -271,7 +286,15 @@ void __init parse_early_param(void);
 void __init parse_early_options(char *cmdline);
 #endif /* __ASSEMBLY__ */
 
+#ifdef CONFIG_DEFERRED_INITCALLS
+#define deferred_module_init(fn) deferred_initcall(fn, 0)
+#define deferred_module_init_sync(fn) deferred_initcall(fn, 0s)
+#endif
 #else /* MODULE */
+
+#ifdef CONFIG_DEFERRED_INITCALLS
+#define deferred_module_init(fn) module_init(fn)
+#endif
 
 #define __setup_param(str, unique_id, fn)	/* nothing */
 #define __setup(str, func) 			/* nothing */

@@ -61,6 +61,14 @@ struct cpuidle_state {
 			      int index);
 };
 
+struct cpuidle_info {
+	/* MOCE (Min Oppotunaty Cost of Energy) */
+	unsigned int	predicted_us;
+	unsigned int	latency_req;
+	int				bfirst_idx;
+	int				bUse_GovDecision;
+};
+
 /* Idle State Flags */
 #define CPUIDLE_FLAG_NONE       (0x00)
 #define CPUIDLE_FLAG_POLLING	(0x01) /* polling state */
@@ -80,6 +88,7 @@ struct cpuidle_device {
 	unsigned int		cpu;
 
 	int			last_residency;
+	int			first_idx;
 	struct cpuidle_state_usage	states_usage[CPUIDLE_STATE_MAX];
 	struct cpuidle_state_kobj *kobjs[CPUIDLE_STATE_MAX];
 	struct cpuidle_driver_kobj *kobj_driver;
@@ -131,7 +140,8 @@ extern bool cpuidle_not_available(struct cpuidle_driver *drv,
 				  struct cpuidle_device *dev);
 
 extern int cpuidle_select(struct cpuidle_driver *drv,
-			  struct cpuidle_device *dev);
+			  struct cpuidle_device *dev,
+			  bool *stop_tick);
 extern int cpuidle_enter(struct cpuidle_driver *drv,
 			 struct cpuidle_device *dev, int index);
 extern void cpuidle_reflect(struct cpuidle_device *dev, int index);
@@ -157,13 +167,14 @@ extern int cpuidle_play_dead(void);
 extern struct cpuidle_driver *cpuidle_get_cpu_driver(struct cpuidle_device *dev);
 static inline struct cpuidle_device *cpuidle_get_device(void)
 {return __this_cpu_read(cpuidle_devices); }
+extern unsigned int cpuidle_get_target_residency(int cpu, int state);
 #else
 static inline void disable_cpuidle(void) { }
 static inline bool cpuidle_not_available(struct cpuidle_driver *drv,
 					 struct cpuidle_device *dev)
 {return true; }
 static inline int cpuidle_select(struct cpuidle_driver *drv,
-				 struct cpuidle_device *dev)
+				 struct cpuidle_device *dev, bool *stop_tick)
 {return -ENODEV; }
 static inline int cpuidle_enter(struct cpuidle_driver *drv,
 				struct cpuidle_device *dev, int index)
@@ -193,6 +204,7 @@ static inline int cpuidle_play_dead(void) {return -ENODEV; }
 static inline struct cpuidle_driver *cpuidle_get_cpu_driver(
 	struct cpuidle_device *dev) {return NULL; }
 static inline struct cpuidle_device *cpuidle_get_device(void) {return NULL; }
+static inline unsigned int cpuidle_get_target_residency(int cpu, int state) {return UINT_MAX;}
 #endif
 
 #ifdef CONFIG_CPU_IDLE
@@ -214,7 +226,7 @@ static inline void cpuidle_use_deepest_state(bool enable)
 #endif
 
 /* kernel/sched/idle.c */
-extern void sched_idle_set_state(struct cpuidle_state *idle_state);
+extern void sched_idle_set_state(struct cpuidle_state *idle_state, int index);
 extern void default_idle_call(void);
 
 #ifdef CONFIG_ARCH_NEEDS_CPU_IDLE_COUPLED
@@ -246,7 +258,8 @@ struct cpuidle_governor {
 					struct cpuidle_device *dev);
 
 	int  (*select)		(struct cpuidle_driver *drv,
-					struct cpuidle_device *dev);
+					struct cpuidle_device *dev,
+					bool *stop_tick);
 	void (*reflect)		(struct cpuidle_device *dev, int index);
 };
 

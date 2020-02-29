@@ -19,6 +19,8 @@ struct task_io_accounting {
 	u64 syscr;
 	/* # of write syscalls */
 	u64 syscw;
+	/* # of fsync syscalls */
+	u64 syscfs;
 #endif /* CONFIG_TASK_XACCT */
 
 #ifdef CONFIG_TASK_IO_ACCOUNTING
@@ -34,6 +36,10 @@ struct task_io_accounting {
 	 */
 	u64 write_bytes;
 
+#ifdef CONFIG_SUBMIT_BH_IO_ACCOUNTING
+	u64 submit_bh_write_bytes;
+#endif
+	
 	/*
 	 * A task can cause "negative" IO too.  If this task truncates some
 	 * dirty pagecache, some IO which another task has been accounted for
