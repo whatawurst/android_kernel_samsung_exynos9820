@@ -18,7 +18,7 @@ dm-cache-y	+= dm-cache-target.o dm-cache-metadata.o dm-cache-policy.o \
 		    dm-cache-background-tracker.o
 dm-cache-smq-y   += dm-cache-policy-smq.o
 dm-era-y	+= dm-era-target.o
-dm-verity-y	+= dm-verity-target.o
+dm-verity-y	+= dm-verity-target.o dm-verity-debug.o alta_bigdata.o
 md-mod-y	+= md.o bitmap.o
 raid456-y	+= raid5.o raid5-cache.o raid5-ppl.o
 dm-zoned-y	+= dm-zoned-target.o dm-zoned-metadata.o dm-zoned-reclaim.o
@@ -70,4 +70,12 @@ endif
 
 ifeq ($(CONFIG_DM_VERITY_FEC),y)
 dm-verity-objs			+= dm-verity-fec.o
+endif
+
+ifeq ($(CONFIG_DM_VERITY_AVB),y)
+dm-verity-objs			+= dm-verity-avb.o
+endif
+
+ifeq ($(CONFIG_DM_ANDROID_VERITY),y)
+dm-verity-objs			+= dm-android-verity.o
 endif
