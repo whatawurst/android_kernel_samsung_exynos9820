@@ -1279,6 +1279,7 @@ static ssize_t iomon_store(struct device *dev,
 	nread = part_in_flight_read(hd);
 	nwrite = part_in_flight_write(hd);
 
+#ifdef CONFIG_KPERFMON
 	if(!strcmp(action, "c") || !strcmp(action, "s") || !strcmp(action, "e")) {
 		ologk("rc %lu rmb %lu "
 			"wc %lu wmb %lu dc %lu dmb %lu "
@@ -1300,6 +1301,7 @@ static ssize_t iomon_store(struct device *dev,
 			jiffies_to_msecs(part_stat_read(hd, io_ticks)),
 			disk->queue->in_flight_time / USEC_PER_MSEC);
 	}
+#endif
 
 	return count;
 }
