@@ -122,3 +122,9 @@ all.config
 
 # Kdevelop4
 *.kdev4
+
+# Samsung
+scripts/crypto/__pycache__/
+scripts/fmp/__pycache__/
+security/samsung/defex_lsm/defex_packed_rules.inc
+security/samsung/defex_lsm/pack_rules
