@@ -499,7 +499,10 @@ KBUILD_CFLAGS += -DANDROID_MAJOR_VERSION=$(MAJOR_VERSION)
 # SELINUX_DIR=$(shell $(CONFIG_SHELL) $(srctree)/scripts/find_matching_major.sh "$(srctree)" "security/selinux" "$(ANDROID_MAJOR_VERSION)")
 else
 export ANDROID_VERSION=990000
+MAJOR_VERSION=$(shell $(CONFIG_SHELL) $(srctree)/scripts/android-major-version.sh $(PLATFORM_VERSION))
+export ANDROID_MAJOR_VERSION=$(MAJOR_VERSION)
 KBUILD_CFLAGS += -DANDROID_VERSION=990000
+KBUILD_CFLAGS += -DANDROID_MAJOR_VERSION=$(MAJOR_VERSION)
 endif
 PHONY += replace_dirs
 replace_dirs:
