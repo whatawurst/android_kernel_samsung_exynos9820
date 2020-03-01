@@ -321,6 +321,27 @@ config SOC_EXYNOS9820
 	select PINCTRL
 	select SAMSUNG_DMADEV
 
+config MACH_SAMSUNG_BEYOND0LTE
+	bool "Samsung Galaxy S10e"
+	depends on SOC_EXYNOS9820
+	help
+	Support for the Samsung Galaxy S10e device
+	which is based on the Exynos9820 platform.
+
+config MACH_SAMSUNG_BEYOND1LTE
+	bool "Samsung Galaxy S10"
+	depends on SOC_EXYNOS9820
+	help
+	Support for the Samsung Galaxy S10 device
+	which is based on the Exynos9820 platform.
+
+config MACH_SAMSUNG_BEYOND2LTE
+	bool "Samsung Galaxy S10+"
+	depends on SOC_EXYNOS9820
+	help
+	Support for the Samsung Galaxy S10+ device
+	which is based on the Exynos9820 platform.
+
 config SOC_EXYNOS9820_EVT0
 	default n
 	bool "Samsung EXYNOS9820 EVT0"
