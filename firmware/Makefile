@@ -208,22 +208,22 @@ wordsize_deps := $(wildcard include/config/64bit.h include/config/32bit.h \
 		include/config/x86_32.h include/config/x86_64.h \
 		firmware/Makefile)
 
-$(patsubst %,$(obj)/%.gen.S, $(fw-shipped-y)): %: $(wordsize_deps)
-	$(call cmd,fwbin,$(fwabs)/$(patsubst $(obj)/%.gen.S,%,$@))
-$(patsubst %,$(obj)/%.gen.S, $(fw-external-y)): %: $(wordsize_deps)
-	$(call cmd,fwbin,$(fwabs)/$(patsubst $(obj)/%.gen.S,%,$@))
+#$(patsubst %,$(obj)/%.gen.S, $(fw-shipped-y)): %: $(wordsize_deps)
+#	$(call cmd,fwbin,$(fwabs)/$(patsubst $(obj)/%.gen.S,%,$@))
+#$(patsubst %,$(obj)/%.gen.S, $(fw-external-y)): %: $(wordsize_deps)
+#	$(call cmd,fwbin,$(fwabs)/$(patsubst $(obj)/%.gen.S,%,$@))
 
 # The .o files depend on the binaries directly; the .S files don't.
-$(patsubst %,$(obj)/%.gen.o, $(fw-shipped-y)): $(obj)/%.gen.o: $(fwdir)/%
-$(patsubst %,$(obj)/%.gen.o, $(fw-external-y)): $(obj)/%.gen.o: $(fwdir)/%
+#$(patsubst %,$(obj)/%.gen.o, $(fw-shipped-y)): $(obj)/%.gen.o: $(fwdir)/%
+#$(patsubst %,$(obj)/%.gen.o, $(fw-external-y)): $(obj)/%.gen.o: $(fwdir)/%
 
 # .ihex is used just as a simple way to hold binary files in a source tree
 # where binaries are frowned upon. They are directly converted with objcopy.
 $(obj)/%: $(obj)/%.ihex
 	$(call cmd,ihex)
 
-obj-y				 += $(patsubst %,%.gen.o, $(fw-external-y))
-obj-$(CONFIG_FIRMWARE_IN_KERNEL) += $(patsubst %,%.gen.o, $(fw-shipped-y))
+obj-y				 += $(patsubst %,%.ihex, $(fw-external-y))
+obj-$(CONFIG_FIRMWARE_IN_KERNEL) += $(patsubst %,%.ihex, $(fw-shipped-y))
 
 ifeq ($(KBUILD_SRC),)
 # Makefile.build only creates subdirectories for O= builds, but external
