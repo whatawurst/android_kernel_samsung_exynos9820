@@ -24,7 +24,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: wl_android.c 851171 2019-11-18 12:03:07Z $
+ * $Id: wl_android.c 848923 2019-11-05 12:28:45Z $
  */
 
 #include <linux/module.h>
@@ -170,10 +170,8 @@
 #define CMD_SET_TID		"SET_TID"
 #define CMD_GET_TID		"GET_TID"
 #endif /* SUPPORT_SET_TID */
-#define CMD_ROAM_VSIE_ENAB_SET	"SET_ROAMING_REASON_ENABLED"
-#define CMD_ROAM_VSIE_ENAB_GET	"GET_ROAMING_REASON_ENABLED"
-#define CMD_BR_VSIE_ENAB_SET	"SET_BR_ERR_REASON_ENABLED"
-#define CMD_BR_VSIE_ENAB_GET	"GET_BR_ERR_REASON_ENABLED"
+#define CMD_ROAM_VSIE_ENAB      "ROAM_VSIE"
+#define CMD_BCN_RPT_VSIE_ENAB   "BCN_RPT_VSIE"
 #endif /* CUSTOMER_HW4_PRIVATE_CMD */
 #define CMD_KEEP_ALIVE          "KEEPALIVE"
 
@@ -5760,11 +5758,11 @@ done2:
 
 #ifdef CUSTOMER_HW4_PRIVATE_CMD
 static int
-wl_android_set_roam_vsie_enab(struct net_device *dev, const char *cmd, u32 cmd_len)
+wl_android_roam_vsie_enab(struct net_device *dev, const char *cmd, u32 cmd_len)
 {
 	s32 err = BCME_OK;
-	u32 roam_vsie_enable = 0;
-	u32 cmd_str_len = strlen(CMD_ROAM_VSIE_ENAB_SET);
+	u32 roam_vsie_enable;
+	u32 cmd_str_len = strlen(CMD_ROAM_VSIE_ENAB);
 	struct bcm_cfg80211 *cfg = wl_get_cfg(dev);
 
 	/* <CMD><SPACE><VAL> */
@@ -5788,7 +5786,7 @@ wl_android_set_roam_vsie_enab(struct net_device *dev, const char *cmd, u32 cmd_l
 	WL_INFORM_MEM(("set roam vsie %d\n", roam_vsie_enable));
 	err = wldev_iovar_setint(dev, "roam_vsie", roam_vsie_enable);
 	if (unlikely(err)) {
-		WL_ERR(("set roam vsie enable failed. ret:%d\n", err));
+		WL_ERR(("roam vsie enable failed. ret:%d\n", err));
 	}
 
 exit:
@@ -5796,43 +5794,11 @@ exit:
 }
 
 static int
-wl_android_get_roam_vsie_enab(struct net_device *dev, char *cmd, u32 cmd_len)
-{
-	s32 err = BCME_OK;
-	u32 roam_vsie_enable = 0;
-	struct bcm_cfg80211 *cfg = wl_get_cfg(dev);
-	int bytes_written;
-
-	/* <CMD> */
-	if (!cmd) {
-		WL_ERR(("wrong arg\n"));
-		return -1;
-	}
-
-	if (dev != bcmcfg_to_prmry_ndev(cfg)) {
-		WL_ERR(("config not supported on non primary i/f\n"));
-		return -1;
-	}
-
-	err = wldev_iovar_getint(dev, "roam_vsie", &roam_vsie_enable);
-	if (unlikely(err)) {
-		WL_ERR(("get roam vsie enable failed. ret:%d\n", err));
-		return -1;
-	}
-	WL_INFORM_MEM(("get roam vsie %d\n", roam_vsie_enable));
-
-	bytes_written = snprintf(cmd, cmd_len, "%s %d",
-		CMD_ROAM_VSIE_ENAB_GET, roam_vsie_enable);
-
-	return bytes_written;
-}
-
-static int
-wl_android_set_bcn_rpt_vsie_enab(struct net_device *dev, const char *cmd, u32 cmd_len)
+wl_android_bcn_rpt_vsie_enab(struct net_device *dev, const char *cmd, u32 cmd_len)
 {
 	s32 err;
-	u32 bcn_vsie_enable = 0;
-	u32 cmd_str_len = strlen(CMD_BR_VSIE_ENAB_SET);
+	u32 bcn_vsie_enable;
+	u32 cmd_str_len = strlen(CMD_BCN_RPT_VSIE_ENAB);
 	struct bcm_cfg80211 *cfg = wl_get_cfg(dev);
 
 	/* <CMD><SPACE><VAL> */
@@ -5861,38 +5827,6 @@ wl_android_set_bcn_rpt_vsie_enab(struct net_device *dev, const char *cmd, u32 cm
 
 exit:
 	return err;
-}
-
-static int
-wl_android_get_bcn_rpt_vsie_enab(struct net_device *dev, char *cmd, u32 cmd_len)
-{
-	s32 err = BCME_OK;
-	u32 bcn_vsie_enable = 0;
-	struct bcm_cfg80211 *cfg = wl_get_cfg(dev);
-	int bytes_written;
-
-	/* <CMD> */
-	if (!cmd) {
-		WL_ERR(("wrong arg\n"));
-		return -1;
-	}
-
-	if (dev != bcmcfg_to_prmry_ndev(cfg)) {
-		WL_ERR(("config not supported on non primary i/f\n"));
-		return -1;
-	}
-
-	err = wldev_iovar_getint(dev, "bcnrpt_vsie_en", &bcn_vsie_enable);
-	if (unlikely(err)) {
-		WL_ERR(("get bcn vsie failed. ret:%d\n", err));
-		return -1;
-	}
-	WL_INFORM_MEM(("get bcn report vsie %d\n", bcn_vsie_enable));
-
-	bytes_written = snprintf(cmd, cmd_len, "%s %d",
-		CMD_BR_VSIE_ENAB_GET, bcn_vsie_enable);
-
-	return bytes_written;
 }
 
 #ifdef SUPPORT_HIDDEN_AP
@@ -9902,14 +9836,10 @@ wl_handle_private_cmd(struct net_device *net, char *command, u32 cmd_len)
 	}
 
 #ifdef CUSTOMER_HW4_PRIVATE_CMD
-	else if (strnicmp(command, CMD_ROAM_VSIE_ENAB_SET, strlen(CMD_ROAM_VSIE_ENAB_SET)) == 0) {
-		bytes_written = wl_android_set_roam_vsie_enab(net, command, priv_cmd.total_len);
-	} else if (strnicmp(command, CMD_ROAM_VSIE_ENAB_GET, strlen(CMD_ROAM_VSIE_ENAB_GET)) == 0) {
-		bytes_written = wl_android_get_roam_vsie_enab(net, command, priv_cmd.total_len);
-	} else if (strnicmp(command, CMD_BR_VSIE_ENAB_SET, strlen(CMD_BR_VSIE_ENAB_SET)) == 0) {
-		bytes_written = wl_android_set_bcn_rpt_vsie_enab(net, command, priv_cmd.total_len);
-	} else if (strnicmp(command, CMD_BR_VSIE_ENAB_GET, strlen(CMD_BR_VSIE_ENAB_GET)) == 0) {
-		bytes_written = wl_android_get_bcn_rpt_vsie_enab(net, command, priv_cmd.total_len);
+	else if (strnicmp(command, CMD_ROAM_VSIE_ENAB, strlen(CMD_ROAM_VSIE_ENAB)) == 0) {
+		bytes_written = wl_android_roam_vsie_enab(net, command, priv_cmd.total_len);
+	} else if (strnicmp(command, CMD_BCN_RPT_VSIE_ENAB, strlen(CMD_BCN_RPT_VSIE_ENAB)) == 0) {
+		bytes_written = wl_android_bcn_rpt_vsie_enab(net, command, priv_cmd.total_len);
 	}
 #ifdef WES_SUPPORT
 	else if (strnicmp(command, CMD_ADDROAMSCANCHLEGACY, strlen(CMD_ADDROAMSCANCHLEGACY)) == 0) {

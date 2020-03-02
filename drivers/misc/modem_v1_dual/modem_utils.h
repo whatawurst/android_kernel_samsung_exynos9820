@@ -216,7 +216,6 @@ static const inline char *arrow(enum direction dir)
 /* CP crash information */
 extern int cp_crash_link;
 extern char *cp_crash_info;
-extern struct crash_reason *nr_crash_reason;
 
 #define clr_cp_crash_link() \
 	do { \

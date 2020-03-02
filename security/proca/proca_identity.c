@@ -34,12 +34,7 @@ int init_proca_identity(struct proca_identity *identity, struct file *file,
 	identity->file = file;
 	identity->certificate = xattr_value;
 	identity->certificate_size = xattr_size;
-
-	if (parsed_cert)
-		identity->parsed_cert = *parsed_cert;
-	else
-		memset(&identity->parsed_cert,
-				0, sizeof(identity->parsed_cert));
+	identity->parsed_cert = *parsed_cert;
 
 	return rc;
 }

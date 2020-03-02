@@ -101,11 +101,7 @@ static unsigned int __hdr_to_gamma(unsigned int hdr_std)
 			ret = INDEX_GAMMA_SRGB;
 			break;
 		case DPP_TRANSFER_SMPTE_170M:
-#ifdef ASSUME_SMPTE170M_IS_SRGB
-			ret = INDEX_GAMMA_SRGB;
-#else
 			ret = INDEX_GAMMA_SMPTE_170M;
-#endif
 			break;
 		case DPP_TRANSFER_GAMMA2_2:
 			ret = INDEX_GAMMA_GAMMA2_2;
@@ -175,15 +171,19 @@ static unsigned int __colorspace_to_gamma_wcg(unsigned int color_mode)
 			gamma = INDEX_GAMMA_UNSPECIFIED;
 			break;
 		case HAL_COLOR_MODE_STANDARD_BT601_625:
-		case HAL_COLOR_MODE_STANDARD_BT601_625_UNADJUSTED:
-		case HAL_COLOR_MODE_STANDARD_BT601_525:
-		case HAL_COLOR_MODE_STANDARD_BT601_525_UNADJUSTED:
-		case HAL_COLOR_MODE_STANDARD_BT709:
-#ifdef ASSUME_SMPTE170M_IS_SRGB
-			gamma = INDEX_GAMMA_SRGB;
-#else
 			gamma = INDEX_GAMMA_SMPTE_170M;
-#endif
+			break;
+		case HAL_COLOR_MODE_STANDARD_BT601_625_UNADJUSTED:
+			gamma = INDEX_GAMMA_SMPTE_170M;
+			break;
+		case HAL_COLOR_MODE_STANDARD_BT601_525:
+			gamma = INDEX_GAMMA_SMPTE_170M;
+			break;
+		case HAL_COLOR_MODE_STANDARD_BT601_525_UNADJUSTED:
+			gamma = INDEX_GAMMA_SMPTE_170M;
+			break;
+		case HAL_COLOR_MODE_STANDARD_BT709:
+			gamma = INDEX_GAMMA_SMPTE_170M;
 			break;
 		case HAL_COLOR_MODE_DCI_P3:
 			gamma = INDEX_GAMMA_GAMMA2_6;
@@ -212,39 +212,31 @@ static unsigned int __colorspace_to_gamma_hdr(unsigned int color_mode)
 			gamma = INDEX_GAMMA_UNSPECIFIED;
 			break;
 		case HAL_COLOR_MODE_STANDARD_BT601_625:
-		case HAL_COLOR_MODE_STANDARD_BT601_625_UNADJUSTED:
-		case HAL_COLOR_MODE_STANDARD_BT601_525:
-		case HAL_COLOR_MODE_STANDARD_BT601_525_UNADJUSTED:
-		case HAL_COLOR_MODE_STANDARD_BT709:
-#ifdef ASSUME_SMPTE170M_IS_SRGB
-#ifdef ASSUME_SRGB_IS_GAMMA22_FOR_HDR
-			gamma = INDEX_GAMMA_GAMMA2_2;
-#else
-			gamma = INDEX_GAMMA_SRGB;
-#endif
-#else
 			gamma = INDEX_GAMMA_SMPTE_170M;
-#endif
+			break;
+		case HAL_COLOR_MODE_STANDARD_BT601_625_UNADJUSTED:
+			gamma = INDEX_GAMMA_SMPTE_170M;
+			break;
+		case HAL_COLOR_MODE_STANDARD_BT601_525:
+			gamma = INDEX_GAMMA_SMPTE_170M;
+			break;
+		case HAL_COLOR_MODE_STANDARD_BT601_525_UNADJUSTED:
+			gamma = INDEX_GAMMA_SMPTE_170M;
+			break;
+		case HAL_COLOR_MODE_STANDARD_BT709:
+			gamma = INDEX_GAMMA_SMPTE_170M;
 			break;
 		case HAL_COLOR_MODE_DCI_P3:
 			gamma = INDEX_GAMMA_GAMMA2_6;
 			break;
 		case HAL_COLOR_MODE_SRGB:
-#ifdef ASSUME_SRGB_IS_GAMMA22_FOR_HDR
-			gamma = INDEX_GAMMA_GAMMA2_2;
-#else
 			gamma = INDEX_GAMMA_SRGB;
-#endif
 			break;
 		case HAL_COLOR_MODE_ADOBE_RGB:
 			gamma = INDEX_GAMMA_GAMMA2_2;
 			break;
 		case HAL_COLOR_MODE_DISPLAY_P3:
-#ifdef ASSUME_SRGB_IS_GAMMA22_FOR_HDR
 			gamma = INDEX_GAMMA_GAMMA2_2;
-#else
-			gamma = INDEX_GAMMA_SRGB;
-#endif
 			break;
 	}
 

@@ -730,9 +730,6 @@ struct modem_ctl {
 	unsigned int sbi_crash_type_mask;
 	unsigned int sbi_crash_type_pos;
 
-	unsigned int sbi_nr_crash_type_mask;
-	unsigned int sbi_nr_crash_type_pos;
-
 	unsigned int ap2cp_cfg_addr;
 	void __iomem *ap2cp_cfg_ioaddr;
 #endif

@@ -57,7 +57,6 @@ struct tsmux_device {
 
 	uint32_t hw_version;
 	void __iomem *regs_base;
-	void __iomem *regs_base_cmu_mfc;
 	struct resource *tsmux_mem;
 	struct clk *tsmux_clock;
 	int irq;

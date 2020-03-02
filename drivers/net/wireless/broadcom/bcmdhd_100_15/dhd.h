@@ -27,7 +27,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: dhd.h 851174 2019-11-18 12:13:55Z $
+ * $Id: dhd.h 848266 2019-10-31 09:18:01Z $
  */
 
 /****************
@@ -1126,9 +1126,6 @@ typedef struct dhd_pub {
 #if defined(DHD_HANG_SEND_UP_TEST)
 	uint req_hang_type;
 #endif /* DHD_HANG_SEND_UP_TEST */
-#ifdef DHD_DETECT_CONSECUTIVE_MFG_HANG
-	uint hang_count;
-#endif /* DHD_DETECT_CONSECUTIVE_MFG_HANG */
 #ifdef WLTDLS
 	bool tdls_enable;
 #endif // endif

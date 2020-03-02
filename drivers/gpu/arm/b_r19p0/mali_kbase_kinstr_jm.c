@@ -30,7 +30,6 @@
 #include <linux/anon_inodes.h>
 #include <linux/circ_buf.h>
 #include <linux/mm.h>
-#include <linux/personality.h>
 #include <linux/rculist_bl.h>
 #include <linux/poll.h>
 #include <linux/slab.h>
@@ -41,14 +40,10 @@
 typedef unsigned int __poll_t;
 #endif
 
-#ifndef ENOTSUP
-#define ENOTSUP EOPNOTSUPP
-#endif
-
 /* The module printing prefix */
 #define PR_ "mali_kbase_kinstr_jm: "
 
-/* Allows us to perform ASM goto for the tracing
+/* Allows use to perform ASM goto for the tracing
  * https://www.kernel.org/doc/Documentation/static-keys.txt
  */
 DEFINE_STATIC_KEY_FALSE(basep_kinstr_jm_reader_static_key);
@@ -98,14 +93,9 @@ struct kbase_kinstr_jm_atom_state_change {
  * @data: The allocated buffer. This is allocated when the user invokes mmap()
  *        on the reader file descriptor. It is released when the user munmaps()
  *        the memory. When accessing this, lock the producer spin lock to
- *        prevent races on the allocated memory. The consume lock does not need
- *        to be held because even though the view indexes are changed the
- *        access to the buffer is synchronised through the memory mapping fault
- *        handler.
+ *        prevent races on the allocated memory.
  * @size: The number of changes that are allowed in @c data. Can be used with
- *        Linux @c CIRC_ helpers. Will always be a power of two. The producer
- *        lock should be held when updating this and stored with an SMP release
- *        memory barrier. This means that the consumer can do an SMP load.
+ *        Linux @c CIRC_ helpers. Will always be a power of two.
  *
  * We use this so we can make it constant across mmap/munmap pairings
  */
@@ -121,25 +111,13 @@ struct reader_changes_buffer {
  *            munmaps() the memory. When accessing this, lock the producer spin
  *            lock to prevent races on the allocated memory.
  * @producer: The producing spinlock which allows us to push changes into the
- *            buffer at the same time as a user view occurring. This needs to
- *            be locked when saving/restoring the IRQ because we can receive an
- *            interrupt from the GPU when an atom completes. The CPU could have
- *            a task preempted that is holding this lock.
- * @consumer: The consuming spinlock which locks around the user view/advance.
- *            Must be held when updating the views of the circular buffer.
- * @overflow: Determines how many state changes overflowed the full buffer.
- *            updated by the producer with an atomic increment. The consumer
- *            should do an atomic exchange with 0 to read and reset the
- *            overflow.
+ *            buffer at the same time as a user view occurring
+ * @consumer: The consuming spinlock which locks around the user view/advance
+ * @overflow: Determines how many state changes overflowed the full buffer
  * @head:     The head of the circular buffer. Can be used with Linux @c CIRC_
- *            helpers. The producer should lock and update this with an SMP
- *            store when a new change lands. The consumer can read with an
- *            SMP load. This allows the producer to safely insert new changes
- *            into the circular buffer.
+ *            helpers
  * @tail:     The tail of the circular buffer. Can be used with Linux @c CIRC_
- *            helpers. The producer should do a READ_ONCE load and the consumer
- *            should SMP store. This allows the consumer to safely advance the
- *            view.
+ *            helpers
  *
  * The circular buffer indexes are unsigned shorts as we should never need to
  * buffer more that 65535 state changes. If we *are* overflowing that amount,
@@ -151,170 +129,10 @@ struct reader_changes {
 	const struct reader_changes_buffer buffer;
 	spinlock_t producer;
 	spinlock_t consumer;
-	atomic_t overflow;
+	size_t overflow;
 	u16 head;
 	u16 tail;
 };
-
-/**
- * reader_changes_bytes() - Converts a requested changes buffer size into the
- *                          number of bytes that need to be physically
- *                          allocated.
- * @size: The requested changes buffer size
- *
- * We allocate half the amount of requested memory so that we can wrap the
- * virtual memory around to the start of the buffer so that the circular buffer
- * is exposed contiguously to user space
- *
- * Return: the number of bytes to allocate with vmalloc_user()
- */
-static inline size_t reader_changes_bytes(const size_t size)
-{
-	return size / 2;
-}
-
-/**
- * is_power_of_two() - Determines if a number is a power of two
- *
- * @value: the value to check
- * Return: true for 1, 2, 4, 8, etc. Zero is deemed not a power of two
- */
-static inline bool is_power_of_two(const unsigned long value)
-{
-	return (value != 0) && ((value & (value - 1)) == 0);
-}
-
-/**
- * reader_changes_is_valid_size() - Determines if requested changes buffer size
- *                                  is valid.
- * @size: The requested mapped memory size
- *
- * As we have a circular buffer, we use the virtual memory to expose the buffer
- * to user space as contiguous memory. This requires that the size is page
- * aligned. It also means that we need to map double the amount of virtual
- * memory as physical memory.
- *
- * We have an extra constraint that the underlying physical buffer must be a
- * power of two so that we can use the efficient circular buffer helpers that
- * the kernel provides.
- *
- * Return:
- * * true  - the size is valid
- * * false - the size is invalid
- */
-static inline bool reader_changes_is_valid_size(const size_t size)
-{
-	typedef struct reader_changes_buffer buffer_t;
-	const size_t elem_size = sizeof(*((buffer_t *)0)->data);
-	const size_t size_size = sizeof(((buffer_t *)0)->size);
-	const size_t size_max = (1 << (size_size * 8)) - 1;
-	const size_t bytes = reader_changes_bytes(size);
-
-	return !(size & (PAGE_SIZE - 1)) && /* Page aligned */
-	       !((size / PAGE_SIZE) & 1) && /* Double count of pages */
-	       is_power_of_two(size / 2) && /* Is a power of two */
-	       ((bytes / elem_size) <= size_max); /* Small enough */
-}
-
-/**
- * reader_changes_init() - Initializes the reader changes and allocates the
- *                         changes buffer
- * @out_ctx: The context pointer, must point to an allocated reader changes
- *           structure. We may support allocating the structure in the future.
- * @size: The requested changes buffer size
- *
- * We allocate half the amount of requested memory so that we can wrap the
- * virtual memory around to the start of the buffer so that the circular buffer
- * is exposed contiguously to user space
- *
- * * (0, U16_MAX] - the number of data elements allocated
- * * -EINVAL - a pointer was invalid
- * * -ENOTSUP - we do not support allocation of the context
- * * -ERANGE - the requested memory size was invalid
- * * -ENOMEM - could not allocate the memory
- * * -EADDRINUSE - the buffer memory was already allocated
- */
-static int reader_changes_init(struct reader_changes *const *const out_ctx,
-			       const size_t size)
-{
-	struct kbase_kinstr_jm_atom_state_change *data = NULL;
-	const size_t bytes = reader_changes_bytes(size);
-	int status = 0;
-	unsigned long irq;
-	struct reader_changes *ctx;
-	struct reader_changes_buffer *buffer;
-
-	BUILD_BUG_ON((PAGE_SIZE % sizeof(*buffer->data)) != 0);
-
-	if (unlikely(!out_ctx)) {
-		status = -EINVAL;
-		goto exit;
-	}
-	ctx = *out_ctx;
-
-	if (unlikely(!ctx)) {
-		status = -ENOTSUP;
-		goto exit;
-	}
-	buffer = (struct reader_changes_buffer *)&ctx->buffer;
-
-	if (!reader_changes_is_valid_size(size)) {
-		status = -ERANGE;
-		goto exit;
-	}
-
-	data = vmalloc_user(bytes);
-	if (!data) {
-		status = -ENOMEM;
-		goto exit;
-	}
-
-	spin_lock_irqsave(&ctx->producer, irq);
-	if (buffer->data) {
-		status = -EADDRINUSE;
-		goto unlock;
-	}
-	swap(buffer->data, data);
-	status = bytes / sizeof(*buffer->data);
-	smp_store_release(&buffer->size, status);
-	smp_store_release(&ctx->head, 0);
-	smp_store_release(&ctx->tail, 0);
-	atomic_set(&ctx->overflow, 0);
-unlock:
-	spin_unlock_irqrestore(&ctx->producer, irq);
-exit:
-	if (unlikely(data))
-		vfree(data);
-	return status;
-}
-
-/**
- * reader_changes_term() - Cleans up a reader changes structure
- * @ctx: The context to clean up
- *
- * Releases the allocated state changes memory
- */
-static void reader_changes_term(struct reader_changes *const ctx)
-{
-	struct reader_changes_buffer *buffer;
-	struct kbase_kinstr_jm_atom_state_change *data = NULL;
-	unsigned long irq;
-
-	if (!ctx)
-		return;
-	buffer = (struct reader_changes_buffer *)&ctx->buffer;
-
-	spin_lock_irqsave(&ctx->producer, irq);
-	swap(buffer->data, data);
-	smp_store_release(&buffer->size, 0);
-	smp_store_release(&ctx->head, 0);
-	smp_store_release(&ctx->tail, 0);
-	atomic_set(&ctx->overflow, 0);
-	spin_unlock_irqrestore(&ctx->producer, irq);
-
-	if (likely(data))
-		vfree(data);
-}
 
 /**
  * reader_changes_threshold() - Determines the threshold of state changes that,
@@ -324,10 +142,10 @@ static void reader_changes_term(struct reader_changes *const ctx)
  * Return: the threshold
  */
 static inline u16 reader_changes_threshold(
-		struct reader_changes *const changes) {
+		const struct reader_changes *const changes) {
 	const struct reader_changes_buffer *buffer = &changes->buffer;
 
-	return min(((size_t)(smp_load_acquire(&buffer->size))) / 4,
+	return min(((size_t)(buffer->size)) / 4,
 		   ((size_t)(PAGE_SIZE)) / sizeof(*buffer->data));
 }
 
@@ -335,7 +153,7 @@ static inline u16 reader_changes_threshold(
  * reader_changes_count() - Retrieves the count of state changes in the buffer
  * @changes: The state changes context
  *
- * The consumer spinlock must be held. Uses the CIRC_CNT macro to determine
+ * Locks the changes consumer spinlock and uses the CIRC_CNT macro to determine
  * the count.
  *
  * Return: the number of changes in the circular buffer
@@ -344,17 +162,12 @@ static u16 reader_changes_count(struct reader_changes *const changes)
 {
 	u16 head, tail, size, count;
 
-	lockdep_assert_held(&changes->consumer);
-
+	spin_lock(&changes->consumer);
 	size = smp_load_acquire(&changes->buffer.size);
 	head = smp_load_acquire(&changes->head);
 	tail = changes->tail;
-
-	/* We would usually use CIRC_CNT_TO_END here but we can use CIRC_CNT
-	 * because we map enough virtual memory so that the top end pages wrap
-	 * around to the start of the circular buffer
-	 */
-	count = CIRC_CNT(head, tail, size);
+	count = CIRC_CNT(head, tail, size) >= 1;
+	spin_unlock(&changes->consumer);
 
 	return count;
 }
@@ -366,6 +179,9 @@ static u16 reader_changes_count(struct reader_changes *const changes)
  * @wait_queue: The queue to be kicked when changes should be read from
  *              userspace. Kicked when a threshold is reached or there is
  *              overflow.
+ *
+ * This function assumes that the reader list has been locked via the head of
+ * the list.
  */
 static void reader_changes_push(
 	struct reader_changes *const changes,
@@ -373,22 +189,20 @@ static void reader_changes_push(
 	struct wait_queue_head *const wait_queue)
 {
 	u16 head, tail, size, threshold;
-	unsigned long irq;
-	struct kbase_kinstr_jm_atom_state_change *data;
+	size_t overflow;
 
-	spin_lock_irqsave(&changes->producer, irq);
+	if (unlikely(!changes->buffer.data))
+		return;
 
-	data = changes->buffer.data;
-
-	if (unlikely(!data))
-		goto unlock;
+	spin_lock(&changes->producer);
 
 	head = changes->head;
 	tail = READ_ONCE(changes->tail);
 	size = changes->buffer.size;
+	overflow = changes->overflow;
 
 	if (CIRC_SPACE(head, tail, size) >= 1) {
-		data[head] = *change;
+		changes->buffer.data[head] = *change;
 
 		smp_store_release(&changes->head, (head + 1) & (size - 1));
 
@@ -396,23 +210,47 @@ static void reader_changes_push(
 
 		if (CIRC_CNT(head + 1, tail, size) >= threshold)
 			wake_up_interruptible(wait_queue);
-	} else {
-		if (1 == atomic_add_unless(&changes->overflow, 1, -1))
+	} else if (overflow < SIZE_MAX) {
+		if (unlikely(!overflow))
 			pr_warn(PR_ "overflow of circular buffer\n");
+		smp_store_release(&changes->overflow, (overflow + 1));
+
 		wake_up_interruptible(wait_queue);
 	}
-unlock:
-	spin_unlock_irqrestore(&changes->producer, irq);
+
+	spin_unlock(&changes->producer);
 }
+
+struct reader;
+
+/**
+ *typedef reader_release_callback - Invoked when a reader is released due to the
+ *                                  file descriptor being closed
+ *
+ * @count: The number of kernel atom state changes that were missed
+ * @user:  Any user data that was provided
+ */
+typedef void (*reader_callback_release)(
+	struct reader *const count, void *user);
+
+/**
+ *struct reader_binding_release - A callback binding that when a reader is
+ *                                released due to the file descriptor being
+ *                                closed
+ * @callback: The function pointer that will be invoked
+ * @user:     The user data that will be passed to the callback
+ */
+struct reader_binding_release {
+	reader_callback_release callback;
+	void *user;
+};
 
 /**
  * struct reader - Allows the kernel state changes to be read by user space.
  * @node: The node in the @c readers locked list
  * @changes: The circular buffer of user changes
  * @wait_queue: A wait queue for poll
- * @context: a pointer to the parent context that created this reader. Can be
- *           used to remove the reader from the list of readers. Reference
- *           counted.
+ * @release: a callback that will be invoked when the reader is terminated
  *
  * The reader is a zero copy memory mapped circular buffer to user space. State
  * changes are pushed into the buffer. The flow from user space is:
@@ -437,32 +275,21 @@ struct reader {
 	struct hlist_bl_node node;
 	struct reader_changes changes;
 	struct wait_queue_head wait_queue;
-	struct kbase_kinstr_jm *context;
+	struct reader_binding_release release;
 };
-
-static struct kbase_kinstr_jm *
-kbase_kinstr_jm_ref_get(struct kbase_kinstr_jm *const ctx);
-static void kbase_kinstr_jm_ref_put(struct kbase_kinstr_jm *const ctx);
-static void kbase_kinstr_jm_readers_add(struct kbase_kinstr_jm *const ctx,
-					struct reader *const reader);
-static void kbase_kinstr_jm_readers_del(struct kbase_kinstr_jm *const ctx,
-					struct reader *const reader);
 
 /**
  * reader_init() - Initialise a instrumentation job manager reader context.
  * @out_ctx: Non-NULL pointer to where the pointer to the created context will
  *           be stored on success.
- * @context: the pointer to the parent context. Reference count will be
- *           increased
  *
  * Return: 0 on success, else error code.
  */
-static int reader_init(struct reader **const out_ctx,
-		       struct kbase_kinstr_jm *const context)
+static int reader_init(struct reader **const out_ctx)
 {
 	struct reader *ctx = NULL;
 
-	if (!out_ctx || !context)
+	if (!out_ctx)
 		return -EINVAL;
 
 	ctx = kzalloc(sizeof(*ctx), GFP_KERNEL);
@@ -473,11 +300,6 @@ static int reader_init(struct reader **const out_ctx,
 	spin_lock_init(&ctx->changes.producer);
 	spin_lock_init(&ctx->changes.consumer);
 	init_waitqueue_head(&ctx->wait_queue);
-
-	/* Reader changes are initialized when memory is mapped */
-
-	ctx->context = kbase_kinstr_jm_ref_get(context);
-	kbase_kinstr_jm_readers_add(context, ctx);
 
 	*out_ctx = ctx;
 
@@ -490,15 +312,18 @@ static int reader_init(struct reader **const out_ctx,
  */
 static void reader_term(struct reader *const ctx)
 {
+	reader_callback_release callback;
+
 	if (!ctx)
 		return;
 
-	reader_changes_term(&ctx->changes);
+	/* Barrier prevents race condition when the context is terminated */
+	callback = smp_load_acquire(&ctx->release.callback);
+	if (callback)
+		callback(ctx, ctx->release.user);
 
-	if (ctx->context) {
-		kbase_kinstr_jm_readers_del(ctx->context, ctx);
-		kbase_kinstr_jm_ref_put(ctx->context);
-	}
+	if (smp_load_acquire(&ctx->changes.buffer.data))
+		pr_warn(PR_ "The reader was terminated before the circular buffer was unmapped\n");
 
 	kfree(ctx);
 }
@@ -506,7 +331,7 @@ static void reader_term(struct reader *const ctx)
 /**
  * reader_release() - Invoked when the reader file descriptor is released
  * @node: The inode that the file descriptor that the file corresponds to. In
- *        our case our reader file descriptor is backed by an anonymous node so
+ *        our case our reader file descriptor is backed by and anonymous node so
  *        not much is in this.
  * @file: the file data. Our reader context is held in the private data
  * Return: zero on success
@@ -523,6 +348,63 @@ static int reader_release(struct inode *const node, struct file *const file)
 }
 
 /**
+ * mmap_bytes() - Converts a requested memory mapped region size into the number
+ *                of bytes that need to be physically allocated.
+ * @size: The requested mapped memory size
+ *
+ * We allocate half the amount of requested memory so that we can wrap the
+ * virtual memory around to the start of the buffer so that the circular buffer
+ * is exposed contiguously to user space
+ *
+ * Return: the number of bytes to allocate with vmalloc_user()
+ */
+static inline unsigned long mmap_bytes(const unsigned long size)
+{
+	return size / 2;
+}
+
+/**
+ * is_power_of_two() - Determines if a number is a power of two
+ *
+ * @value: the value to check
+ * Return: true for 1, 2, 4, 8, etc. Zero is deemed not a power of two
+ */
+static inline bool is_power_of_two(const unsigned long value)
+{
+	return (value != 0) && ((value & (value - 1)) == 0);
+}
+
+/**
+ * is_valid_mmap_size() - Determines if requested memory mapped size is valid.
+ * @size: The requested mapped memory size
+ *
+ * As we have a circular buffer, we use the virtual memory to expose the buffer
+ * to user space as contiguous memory. This requires that the size is page
+ * aligned. It also means that we need to map double the amount of virtual
+ * memory as physical memory.
+ *
+ * We have an extra constraint that the underlying physical buffer must be a
+ * power of two so that we can use the efficient circular buffer helpers that
+ * the kernel provides.
+ *
+ * Return:
+ * * true  - the size is valid
+ * * false - the size is invalid
+ */
+static inline bool is_valid_mmap_size(const unsigned long size)
+{
+	typedef struct reader_changes_buffer buffer_t;
+	const size_t elem_size = sizeof(*((buffer_t *)0)->data);
+	const size_t size_size = sizeof(((buffer_t *)0)->size);
+	const size_t size_max = (1 << (size_size * 8)) - 1;
+
+	return !(size & (PAGE_SIZE - 1)) && /* Page aligned */
+	       !((size / PAGE_SIZE) & 1) && /* Double count of pages */
+	       is_power_of_two(size / 2) && /* Is a power of two */
+	       ((mmap_bytes(size) / elem_size) <= size_max); /* Small enough */
+}
+
+/**
  * reader_mmap_open() - Invoked when the reader memory is opened via @c mmap
  * @vma: The virtual memory area of the mapping
  *
@@ -533,13 +415,37 @@ static void reader_mmap_open(struct vm_area_struct *const vma)
 	struct file *const file = vma->vm_file;
 	struct reader *const reader = file->private_data;
 	struct reader_changes *const changes = &reader->changes;
+	struct kbase_kinstr_jm_atom_state_change *data;
 	const unsigned long size = vma->vm_end - vma->vm_start;
+	const unsigned long bytes = mmap_bytes(size);
+	struct reader_changes_buffer *const buffer =
+		(struct reader_changes_buffer *)&changes->buffer;
 
-	const int status = reader_changes_init(&changes, size);
+	if (!is_valid_mmap_size(size))
+		return;
 
-	if (status < 0)
-		pr_warn(PR_ "failed to initialize reader changes: %i\n",
-			status);
+	if (smp_load_acquire(&buffer->data)) {
+		pr_warn(PR_ "circular buffer was already allocated\n");
+		return;
+	}
+
+	data = vmalloc_user(bytes);
+	if (!data)
+		return;
+	if (WARN_ON(smp_load_acquire(&buffer->data)))
+		return;
+
+	spin_lock(&changes->producer);
+	spin_lock(&changes->consumer);
+	smp_store_release(&buffer->data, data);
+	smp_store_release(&buffer->size, bytes / sizeof(*buffer->data));
+	changes->head = 0;
+	changes->tail = 0;
+	changes->overflow = 0;
+	spin_unlock(&changes->consumer);
+	spin_unlock(&changes->producer);
+
+	static_branch_inc(&basep_kinstr_jm_reader_static_key);
 }
 
 /**
@@ -553,8 +459,19 @@ static void reader_mmap_close(struct vm_area_struct *const vma)
 	struct file *const file = vma->vm_file;
 	struct reader *const reader = file->private_data;
 	struct reader_changes *const changes = &reader->changes;
+	struct kbase_kinstr_jm_atom_state_change *data;
+	struct reader_changes_buffer *const buffer =
+		(struct reader_changes_buffer *)&changes->buffer;
 
-	reader_changes_term(changes);
+	data = xchg(&buffer->data, NULL);
+	if (!data)
+		return;
+
+	smp_store_release(&buffer->size, 0);
+
+	vfree(data);
+
+	static_branch_dec(&basep_kinstr_jm_reader_static_key);
 }
 
 /**
@@ -574,7 +491,6 @@ static int reader_mmap_mremap(struct vm_area_struct *const vma)
  * Returns:
  * * 0 - successful mapping
  * * -EINVAL - a pointer was invalid
- * * -EBADF - the file descriptor did not have an attached reader
  * * VM_FAULT_NOPAGE - there was no memory available for the address
  */
 static int reader_mmap_fault(struct vm_fault *const vmf)
@@ -582,9 +498,10 @@ static int reader_mmap_fault(struct vm_fault *const vmf)
 	struct vm_area_struct *vma;
 	struct file *file;
 	struct reader *reader;
-	struct kbase_kinstr_jm_atom_state_change *buffer;
 	struct reader_changes *changes;
-	unsigned long offset, size, irq;
+	struct kbase_kinstr_jm_atom_state_change *buffer;
+	unsigned long offset;
+	unsigned long size;
 
 	if (unlikely(!vmf))
 		return -EINVAL;
@@ -599,13 +516,11 @@ static int reader_mmap_fault(struct vm_fault *const vmf)
 
 	reader = file->private_data;
 	if (unlikely(!reader))
-		return -EBADF;
-
+		return -EINVAL;
 	changes = &reader->changes;
-	spin_lock_irqsave(&changes->producer, irq);
-	buffer = changes->buffer.data;
-	size = changes->buffer.size * sizeof(*buffer);
-	spin_unlock_irqrestore(&changes->producer, irq);
+
+	buffer = smp_load_acquire(&changes->buffer.data);
+	size = smp_load_acquire(&changes->buffer.size) * sizeof(*buffer);
 
 	if (unlikely(!buffer))
 		return VM_FAULT_NOPAGE;
@@ -617,7 +532,7 @@ static int reader_mmap_fault(struct vm_fault *const vmf)
 	 * allows user space to see a contiguous memory buffer
 	 */
 	if (offset >= (size * 2))
-		return VM_FAULT_NOPAGE;
+		return -VM_FAULT_NOPAGE;
 	offset %= size;
 	offset /= sizeof(*buffer);
 
@@ -642,138 +557,106 @@ static const struct vm_operations_struct vm_operations = {
  * Return:
  * * 0 - successful mapping
  * * -EINVAL - a pointer was invalid
- * * -EBADF - the file descriptor did not have an attached reader
- * * -ERANGE - the requested memory size was invalid
- * * -EOVERFLOW - the buffer allocated was too large
  * * -EADDRINUSE - the memory was already mapped for the reader file descriptor
  * * -ENXIO - the offset for the page was invalid, we only allow the whole
  *            buffer to be mapped
- * * -EACCES - the virtual memory flags were invalid, especially that writable
- * *           memory was asked for
  * * -ENOMEM - we could not allocate the backing memory for the mapping
  */
 static int reader_mmap(struct file *const file,
 		       struct vm_area_struct *const vma)
 {
 	struct reader *reader;
-	struct reader_changes *changes;
-	unsigned long size, offset;
+	const struct reader_changes_buffer *buffer;
+	struct kbase_kinstr_jm_atom_state_change *data;
+	unsigned long size;
+	unsigned long offset;
 	unsigned short flags;
-	int status = 0;
-	u16 count;
 
-	if (unlikely(!file || !vma)) {
-		status = -EINVAL;
-		goto exit;
-	}
+	if (!file || !vma)
+		return -EINVAL;
 
 	reader = file->private_data;
-	if (unlikely(!reader)) {
-		status = -EBADF;
-		goto exit;
-	}
-	changes = &reader->changes;
-
+	size = vma->vm_end - vma->vm_start;
+	offset = vma->vm_pgoff << PAGE_SHIFT;
 	flags = vma->vm_flags;
-	if ((flags & VM_WRITE) || (flags & VM_SHARED) ||
-	    (!(current->personality & READ_IMPLIES_EXEC) &&
-	     (flags & VM_EXEC))) {
-		pr_warn(PR_ "can only map private read only memory\n");
-		status = -EACCES;
-		goto exit;
+
+	if (!reader)
+		return -EINVAL;
+
+	buffer = &reader->changes.buffer;
+	data = smp_load_acquire(&buffer->data);
+
+	if (data) {
+		pr_warn(PR_ "cannot have multiple reader mappings\n");
+		return -EADDRINUSE;
 	}
+
+	if ((flags & VM_EXEC) || (flags & VM_WRITE) || (flags & VM_SHARED)) {
+		pr_warn(PR_ "can only map private read only memory\n");
+		return -EINVAL;
+	}
+
 	vma->vm_flags &= ~(VM_MAYWRITE | VM_MAYEXEC);
 
-	offset = vma->vm_pgoff << PAGE_SHIFT;
+	BUILD_BUG_ON((PAGE_SIZE % sizeof(*data)) != 0);
+	if (!is_valid_mmap_size(size)) {
+		pr_warn(PR_ "mapped bytes (%lu) must be a power of two multiple of page size, doubled. Try %lu [(PAGE_SIZE << 2) * 2]\n",
+			size, ((PAGE_SIZE << 2) * 2));
+		return -EINVAL;
+	}
+
 	if (offset & ~PAGE_MASK) {
 		pr_warn(PR_ "offset not aligned: %lu\n", offset);
-		status = -ENXIO;
-		goto exit;
+		return -ENXIO;
 	} else if (offset != 0) {
 		pr_warn(PR_ "can only map full buffer\n");
-		status = -ENXIO;
-		goto exit;
+		return -ENXIO;
 	}
 
 	vma->vm_ops = &vm_operations;
+	reader_mmap_open(vma);
 
-	size = vma->vm_end - vma->vm_start;
-	status = reader_changes_init(&changes, size);
-	if (status > U16_MAX) {
-		status = -EOVERFLOW;
-		goto term;
-	} else if (status == -ERANGE) {
-		pr_warn(PR_ "failed to allocate %lu virtual bytes\n", size);
-		goto exit;
-	} else if (status == -ENOMEM) {
-		pr_warn(PR_ "mapped bytes (%lu) must be a power of two multiple of page size, doubled. Try %lu [(PAGE_SIZE << 2) * 2]\n",
-			size, ((PAGE_SIZE << 2) * 2));
-		goto exit;
-	} else if (status == -EADDRINUSE) {
-		pr_warn(PR_ "cannot have multiple reader mappings\n");
-		goto exit;
-	} else if (status < 0) {
-		pr_warn(PR_ "failed to initialize reader changes: %i\n",
-			status);
-		goto exit;
+	if (!smp_load_acquire(&buffer->data)) {
+		pr_warn(PR_ "failed to allocate %lu bytes\n", mmap_bytes(size));
+		reader_mmap_close(vma);
+		return -ENOMEM;
 	}
 
-	count = (u16)status;
-	pr_info(PR_ "mapped %zu virtual bytes against %zu physical bytes which allows storage of %u states\n",
-		2 * count * sizeof(*changes->buffer.data),
-		count * sizeof(*changes->buffer.data),
-		count);
+	pr_info(PR_ "mapped %lu bytes against %lu physical bytes which allows storage of %u states\n",
+		size, mmap_bytes(size), smp_load_acquire(&buffer->size));
+
 	return 0;
-term:
-	reader_changes_term(changes);
-exit:
-	return status;
 }
 
 /**
  * reader_poll() - Handles a poll call on the reader file descriptor
  * @file: The file that the poll was performed on
  * @wait: The poll table
- *
- * The results of the poll will be unreliable if there is no mapped memory as
- * there is no circular buffer to push atom state changes into.
- *
  * Return:
  * * 0 - no data ready
  * * POLLIN - state changes have been buffered
- * * -EBADF - the file descriptor did not have an attached reader
- * * -EINVAL - the IO control arguments were invalid
  */
 static __poll_t reader_poll(struct file *const file,
 			    struct poll_table_struct *const wait)
 {
 	struct reader *reader;
-	struct reader_changes *changes;
-	u16 threshold, count;
+	u16 threshold;
 
-	if (unlikely(!file || !wait))
+	if (!file || !wait)
 		return -EINVAL;
 
 	reader = file->private_data;
-	if (unlikely(!reader))
-		return -EBADF;
-	changes = &reader->changes;
+	if (!reader)
+		return -EINVAL;
 
-	spin_lock(&changes->consumer);
-	threshold = reader_changes_threshold(changes);
-	count = reader_changes_count(&reader->changes);
-	spin_unlock(&changes->consumer);
+	threshold = reader_changes_threshold(&reader->changes);
 
-	if (count >= threshold)
+	if (reader_changes_count(&reader->changes) >= threshold)
 		return POLLIN;
 
 	poll_wait(file, &reader->wait_queue, wait);
 
-	spin_lock(&changes->consumer);
-	count = reader_changes_count(&reader->changes);
-	spin_unlock(&changes->consumer);
-
-	return count >= 1 ? POLLIN : 0;
+	return reader_changes_count(&reader->changes) >= 1 ? POLLIN : 0;
 }
 
 /**
@@ -788,10 +671,6 @@ static __poll_t reader_poll(struct file *const file,
  * starting index and count of changes. The user can then use these to
  * dereference the mapped memory to get the changes with zero copy.
  *
- * This function call is only valid whilst the user has mapped the reader
- * memory. If the memory has not been mapped the indexes are non-sensical
- * because they cannot be used to index into a valid kernel read-only buffer.
- *
  * Return:
  * * 0 - successfully returned the readable view into the circular buffer
  * * -EINVAL - the IO control arguments were invalid
@@ -802,6 +681,7 @@ static long reader_ioctl_view(struct reader *const reader, void __user *buffer,
 {
 	struct reader_changes *const changes = &reader->changes;
 	struct kbase_kinstr_jm_reader_view view = { .index = 0, .count = 0 };
+	u16 head, tail, size;
 
 	if (unlikely(!reader || !buffer))
 		return -EINVAL;
@@ -810,8 +690,18 @@ static long reader_ioctl_view(struct reader *const reader, void __user *buffer,
 		return -EINVAL;
 
 	spin_lock(&changes->consumer);
-	view.count = reader_changes_count(changes);
-	view.index = changes->tail;
+
+	size = smp_load_acquire(&changes->buffer.size);
+	head = smp_load_acquire(&changes->head);
+	tail = changes->tail;
+
+	/* We would usually use CIRC_CNT_TO_END here but we can use CIRC_CNT
+	 * because we map enough virtual memory so that the top end pages wrap
+	 * around to the start of the circular buffer
+	 */
+	view.count = CIRC_CNT(head, tail, size);
+	view.index = tail;
+
 	spin_unlock(&changes->consumer);
 
 	if (copy_to_user(buffer, &view, buffer_size))
@@ -827,11 +717,6 @@ static long reader_ioctl_view(struct reader *const reader, void __user *buffer,
  *
  * This is called with the count provided back from the view IO control call.
  *
- * This function call is only valid whilst the user has mapped the reader
- * memory. If the memory has not been mapped, advancing the index will not
- * perform an useful operation because the advancement will not relate to any
- * valid kernel read-only memory.
- *
  * Return:
  * * [1, LONG_MAX] - the number of overflowed state changes
  * * 0 - a successful advancement of the reading view
@@ -841,8 +726,8 @@ static long reader_ioctl_advance(struct reader *const reader,
 				 const size_t advance)
 {
 	struct reader_changes *changes;
+	u16 head, tail, size;
 	size_t allowed, overflow;
-	u16 size;
 
 	if (unlikely(!reader))
 		return -EINVAL;
@@ -851,7 +736,11 @@ static long reader_ioctl_advance(struct reader *const reader,
 
 	spin_lock(&changes->consumer);
 
-	allowed = reader_changes_count(changes);
+	size = smp_load_acquire(&changes->buffer.size);
+	head = smp_load_acquire(&changes->head);
+	tail = changes->tail;
+	allowed = CIRC_CNT(head, tail, size);
+
 	if (advance > allowed) {
 		spin_unlock(&changes->consumer);
 		pr_warn(PR_ "cannot advance %zu elements as there are only %zu unread elements\n",
@@ -859,23 +748,13 @@ static long reader_ioctl_advance(struct reader *const reader,
 		return -EINVAL;
 	}
 
-	size = smp_load_acquire(&changes->buffer.size);
-	smp_store_release(&changes->tail,
-			  (changes->tail + advance) & (size - 1));
+	smp_store_release(&changes->tail, (tail + advance) & (size - 1));
 
-	/* While atomic_t, atomic_long_t and atomic64_t use int, long and s64
-	 * respectively (for hysterical raisins), the kernel uses
-	 *  -fno-strict-overflow (which implies -fwrapv) and defines signed
-	 * overflow to behave like 2s-complement.
-	 *
-	 * Therefore, an explicitly unsigned variant of the atomic ops is
-	 * strictly unnecessary and we can simply cast, there is no UB.
-	 */
-	overflow = (size_t)(atomic_xchg(&changes->overflow, 0));
+	overflow = xchg(&changes->overflow, 0);
 
 	spin_unlock(&changes->consumer);
 
-	if (unlikely(overflow > LONG_MAX))
+	if (overflow > LONG_MAX)
 		return LONG_MAX;
 
 	return overflow;
@@ -932,7 +811,6 @@ static long reader_ioctl_layout(struct reader *const reader,
  * @arg: The IO control argument
  * Return:
  * * -EINVAL - invalid IO control command
- * * -EBADF - the file descriptor did not have an attached reader
  */
 static long reader_ioctl(struct file *const file, const unsigned int cmd,
 			 const unsigned long arg)
@@ -945,7 +823,7 @@ static long reader_ioctl(struct file *const file, const unsigned int cmd,
 
 	reader = file->private_data;
 	if (unlikely(!reader))
-		return -EBADF;
+		return -EINVAL;
 
 	switch (cmd) {
 	case KBASE_KINSTR_JM_READER_VIEW:
@@ -986,106 +864,62 @@ static const struct file_operations file_operations = {
  * @readers: a bitlocked list of opened readers. Readers are attached to the
  *           private data of a file descriptor that the user opens with the
  *           KBASE_IOCTL_KINSTR_JM_FD IO control call.
- * @refcount: reference count for the context. Any reader will have a link
- *            back to the context so that they can remove themselves from the
- *            list.
  *
  * This is opaque outside this compilation unit
  */
 struct kbase_kinstr_jm {
 	struct hlist_bl_head readers;
-	struct kref refcount;
 };
 
 /**
- * kbasep_kinstr_jm_release() - Invoked when the reference count is dropped
- * @ref: the context reference count
+ * kbasep_kinstr_jm_reader_release() - Invoked when a reader is released
+ * @reader: the reader that is being released
+ * @user:   the kinstr_jm context
+ *
+ * We use this callback to remove the reader from the list of readers.
  */
-static void kbase_kinstr_jm_release(struct kref *const ref)
+static void kbasep_kinstr_jm_reader_release(struct reader *const reader,
+					    void *user)
 {
-	struct kbase_kinstr_jm *const ctx =
-		container_of(ref, struct kbase_kinstr_jm, refcount);
-	kfree(ctx);
-}
+	struct kbase_kinstr_jm *const ctx = user;
+	struct hlist_bl_head readers;
 
-/**
- * kbase_kinstr_jm_ref_get() - Reference counts the instrumentation context
- * @ctx: the context to reference count
- * Return: the reference counted context
- */
-static struct kbase_kinstr_jm *
-kbase_kinstr_jm_ref_get(struct kbase_kinstr_jm *const ctx)
-{
-	if (likely(ctx))
-		kref_get(&ctx->refcount);
-	return ctx;
-}
-
-/**
- * kbase_kinstr_jm_ref_put() - Dereferences the instrumentation context
- * @ctx: the context to lower the reference count on
- */
-static void kbase_kinstr_jm_ref_put(struct kbase_kinstr_jm *const ctx)
-{
-	if (likely(ctx))
-		kref_put(&ctx->refcount, kbase_kinstr_jm_release);
-}
-
-/**
- * kbase_kinstr_jm_readers_add() - Adds a reader to the list of readers
- * @ctx: the instrumentation context
- * @reader: the reader to add
- */
-static void kbase_kinstr_jm_readers_add(struct kbase_kinstr_jm *const ctx,
-					struct reader *const reader)
-{
-	struct hlist_bl_head *const readers = &ctx->readers;
-
-	hlist_bl_lock(readers);
-	hlist_bl_add_head_rcu(&reader->node, readers);
-	hlist_bl_unlock(readers);
-
-	static_branch_inc(&basep_kinstr_jm_reader_static_key);
-}
-
-/**
- * readers_del() - Deletes a reader from the list of readers
- * @ctx: the instrumentation context
- * @reader: the reader to delete
- */
-static void kbase_kinstr_jm_readers_del(struct kbase_kinstr_jm *const ctx,
-					struct reader *const reader)
-{
-	struct hlist_bl_head *const readers = &ctx->readers;
-
-	hlist_bl_lock(readers);
+	/* If we get the head before the termination of the context happens
+	 * we can safely delete the reader in the list
+	 */
+	readers.first = smp_load_acquire(&ctx->readers.first);
+	hlist_bl_lock(&readers);
 	hlist_bl_del_rcu(&reader->node);
-	hlist_bl_unlock(readers);
-
-	static_branch_dec(&basep_kinstr_jm_reader_static_key);
+	hlist_bl_unlock(&readers);
 }
 
 int kbase_kinstr_jm_fd(struct kbase_kinstr_jm *const ctx)
 {
 	struct reader *reader = NULL;
-	int status;
 	int fd;
 
 	if (!ctx)
 		return -EINVAL;
 
-	status = reader_init(&reader, ctx);
-	if (status < 0)
-		return status;
+	fd = reader_init(&reader);
+	if (fd)
+		goto failure;
 
 	fd = anon_inode_getfd("[mali_kinstr_jm]", &file_operations, reader,
 			      O_CLOEXEC);
 
-	if (fd < 0) {
-		reader_term(reader);
-		return fd;
-	}
+	if (fd < 0)
+		goto failure;
 
+	hlist_bl_lock(&ctx->readers);
+	hlist_bl_add_head_rcu(&reader->node, &ctx->readers);
+	reader->release.callback = kbasep_kinstr_jm_reader_release;
+	reader->release.user = ctx;
+	hlist_bl_unlock(&ctx->readers);
+
+	return fd;
+failure:
+	reader_term(reader);
 	return fd;
 }
 
@@ -1101,7 +935,6 @@ int kbase_kinstr_jm_init(struct kbase_kinstr_jm **const out_ctx)
 		return -ENOMEM;
 
 	INIT_HLIST_BL_HEAD(&ctx->readers);
-	kref_init(&ctx->refcount);
 
 	*out_ctx = ctx;
 
@@ -1110,7 +943,24 @@ int kbase_kinstr_jm_init(struct kbase_kinstr_jm **const out_ctx)
 
 void kbase_kinstr_jm_term(struct kbase_kinstr_jm *const ctx)
 {
-	kbase_kinstr_jm_ref_put(ctx);
+	struct reader *reader;
+	struct hlist_bl_node *node;
+	struct hlist_bl_head readers;
+
+	if (!ctx)
+		return;
+
+	/* There is a race condition here where a file descriptor can be
+	 * released when we are killing the callbacks. We synchronise on the
+	 * list head pointer.
+	 */
+	readers.first = xchg(&ctx->readers.first, NULL);
+	rcu_read_lock();
+	hlist_bl_for_each_entry_rcu(reader, node, &readers, node)
+		smp_store_release(&reader->release.callback, NULL);
+	rcu_read_unlock();
+
+	kfree(ctx);
 }
 
 /**
