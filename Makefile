@@ -484,7 +484,7 @@ ifneq ($(KBUILD_SRC),)
 	    $(srctree) $(objtree) $(VERSION) $(PATCHLEVEL)
 endif
 
-PLATFORM_VERSION ?= 9.0
+PLATFORM_VERSION ?= 10.0.0
 @echo "PLATFORM_VERSION: $(PLATFORM_VERSION)"
 
 ifneq ($(PLATFORM_VERSION), )
