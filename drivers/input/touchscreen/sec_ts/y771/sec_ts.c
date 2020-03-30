@@ -1451,7 +1451,7 @@ static void sec_ts_read_event(struct sec_ts_data *ts)
 			case SEC_TS_GESTURE_CODE_SWIPE:
 				ts->scrub_id = SPONGE_EVENT_TYPE_SPAY;
 				input_info(true, &ts->client->dev, "%s: SPAY: %d\n", __func__, ts->scrub_id);
-				input_report_key(ts->input_dev, KEY_POWER, 1);
+				input_report_key(ts->input_dev, KEY_BLACK_UI_GESTURE, 1);
 				ts->all_spay_count++;
 				break;
 			case SEC_TS_GESTURE_CODE_DOUBLE_TAP:
@@ -1467,13 +1467,13 @@ static void sec_ts_read_event(struct sec_ts_data *ts)
 					input_info(true, &ts->client->dev, "%s: AOD: %d, %d, %d\n",
 							__func__, ts->scrub_id, ts->scrub_x, ts->scrub_y);
 #endif
-					input_report_key(ts->input_dev, KEY_POWER, 1);
+					input_report_key(ts->input_dev, KEY_BLACK_UI_GESTURE, 1);
 					ts->all_aod_tap_count++;
 				} else if (p_gesture_status->gesture_id == SEC_TS_GESTURE_ID_DOUBLETAP_TO_WAKEUP) {
 					input_info(true, &ts->client->dev, "%s: AOT\n", __func__);
-					input_report_key(ts->input_dev, KEY_POWER, 1);
+					input_report_key(ts->input_dev, KEY_WAKEUP, 1);
 					input_sync(ts->input_dev);
-					input_report_key(ts->input_dev, KEY_POWER, 0);
+					input_report_key(ts->input_dev, KEY_WAKEUP, 0);
 				}
 				break;
 			case SEC_TS_GESTURE_CODE_SINGLE_TAP:
@@ -1488,7 +1488,7 @@ static void sec_ts_read_event(struct sec_ts_data *ts)
 				input_info(true, &ts->client->dev, "%s: SINGLE TAP: %d, %d, %d\n",
 						__func__, ts->scrub_id, ts->scrub_x, ts->scrub_y);
 #endif
-				input_report_key(ts->input_dev, KEY_POWER, 1);
+				input_report_key(ts->input_dev, KEY_BLACK_UI_GESTURE, 1);
 				break;
 			case SEC_TS_GESTURE_CODE_PRESS:
 				input_info(true, &ts->client->dev, "%s: FOD: %sPRESS\n",
@@ -1497,7 +1497,7 @@ static void sec_ts_read_event(struct sec_ts_data *ts)
 			}
 
 			input_sync(ts->input_dev);
-			input_report_key(ts->input_dev, KEY_POWER, 0);
+			input_report_key(ts->input_dev, KEY_BLACK_UI_GESTURE, 0);
 			break;
 		default:
 			input_err(true, &ts->client->dev, "%s: unknown event %x %x %x %x %x %x\n", __func__,
@@ -2065,10 +2065,11 @@ static void sec_ts_set_input_prop(struct sec_ts_data *ts, struct input_dev *dev,
 	set_bit(EV_SW, dev->evbit);
 	set_bit(BTN_TOUCH, dev->keybit);
 	set_bit(BTN_TOOL_FINGER, dev->keybit);
-	set_bit(KEY_POWER, dev->keybit);
+	set_bit(KEY_BLACK_UI_GESTURE, dev->keybit);
 	set_bit(KEY_INT_CANCEL, dev->keybit);
 
 	set_bit(propbit, dev->propbit);
+	set_bit(KEY_WAKEUP, dev->keybit);
 
 	input_set_abs_params(dev, ABS_MT_POSITION_X, 0, ts->plat_data->max_x, 0, 0);
 	input_set_abs_params(dev, ABS_MT_POSITION_Y, 0, ts->plat_data->max_y, 0, 0);
@@ -2547,7 +2548,6 @@ void sec_ts_unlocked_release_all_finger(struct sec_ts_data *ts)
 	ts->touch_count = 0;
 	ts->check_multi = 0;
 
-	input_report_key(ts->input_dev, KEY_HOMEPAGE, 0);
 	input_sync(ts->input_dev);
 }
 
@@ -2599,7 +2599,6 @@ void sec_ts_locked_release_all_finger(struct sec_ts_data *ts)
 	ts->touch_count = 0;
 	ts->check_multi = 0;
 
-	input_report_key(ts->input_dev, KEY_HOMEPAGE, 0);
 	input_sync(ts->input_dev);
 
 	mutex_unlock(&ts->eventlock);
