@@ -7317,6 +7317,7 @@ static int ufshcd_host_reset_and_restore(struct ufs_hba *hba)
 static int ufshcd_reset_and_restore(struct ufs_hba *hba)
 {
 	int err = 0;
+	unsigned long flags;
 	int retries = MAX_HOST_RESET_RETRIES;
 
 	int tag;
@@ -7339,7 +7340,6 @@ static int ufshcd_reset_and_restore(struct ufs_hba *hba)
 		err = ufshcd_host_reset_and_restore(hba);
 	} while (err && --retries);
 
-<<<<<<< HEAD
 	/*
 	 * After reset the door-bell might be cleared, complete
 	 * outstanding requests in s/w here.
@@ -7349,8 +7349,6 @@ static int ufshcd_reset_and_restore(struct ufs_hba *hba)
 	ufshcd_tmc_handler(hba);
 	spin_unlock_irqrestore(hba->host->host_lock, flags);
 
-=======
->>>>>>> 30e26cfdfe1a9323b77b687b458e9ae76897c16d
 	return err;
 }
 
