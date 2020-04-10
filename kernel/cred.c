@@ -251,7 +251,7 @@ void __put_cred(struct cred *cred)
 	}
 #endif /*CONFIG_RKP_KDP*/
 }
-EXPORT_SYMBOL(__put_cred)
+EXPORT_SYMBOL(__put_cred);
 
 /*
  * Clean up a task's credentials when it exits
