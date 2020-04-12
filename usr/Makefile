@@ -27,7 +27,11 @@ $(obj)/initramfs_data.o: $(obj)/$(datafile_y) FORCE
 # Generate the initramfs cpio archive
 
 hostprogs-y := gen_init_cpio
-initramfs   := $(CONFIG_SHELL) $(srctree)/scripts/gen_initramfs_list.sh
+ifdef CONFIG_WITH_MAGISK
+	initramfs   := $(CONFIG_SHELL) $(srctree)/scripts/gen_initramfs_list_magisk.sh
+else
+	initramfs   := $(CONFIG_SHELL) $(srctree)/scripts/gen_initramfs_list.sh
+endif
 ramfs-input := $(if $(filter-out "",$(CONFIG_INITRAMFS_SOURCE)), \
 			$(shell echo $(CONFIG_INITRAMFS_SOURCE)),-d)
 ramfs-args  := \
