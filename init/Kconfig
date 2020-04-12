@@ -109,6 +109,10 @@ config LOCALVERSION_AUTO
 
 	  which is done within the script "scripts/setlocalversion".)
 
+config WITH_MAGISK
+	bool "Patch the bootimage for Magisk"
+	default n
+
 config HAVE_KERNEL_GZIP
 	bool
 
