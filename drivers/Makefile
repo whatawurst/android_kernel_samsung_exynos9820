@@ -200,3 +200,5 @@ obj-$(CONFIG_FIVE_TEE_DRIVER)	+= five/
 #Fingerprint
 obj-$(CONFIG_SENSORS_FINGERPRINT)       += fingerprint/
 
+obj-y				+= kperfmon/
+
