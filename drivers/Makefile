@@ -203,6 +203,9 @@ obj-$(CONFIG_EXYNOS_BTS)	+= bts/
 # FIVE TEE driver
 obj-$(CONFIG_FIVE_TEE_DRIVER)	+= five/
 
+# vision driver
+obj-$(CONFIG_VISION_SUPPORT)	+= vision/
+
 #Fingerprint
 obj-$(CONFIG_SENSORS_FINGERPRINT)       += fingerprint/
 
