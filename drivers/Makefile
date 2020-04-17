@@ -209,6 +209,9 @@ obj-$(CONFIG_VISION_SUPPORT)	+= vision/
 #Fingerprint
 obj-$(CONFIG_SENSORS_FINGERPRINT)       += fingerprint/
 
+# Sensorhub driver
+obj-$(CONFIG_SENSORS_SSP)	+= sensorhub/
+
 # optics sensor driver
 obj-$(CONFIG_SENSORS_HRMSENSOR)	+= optics/
 obj-$(CONFIG_SENSORS_MAX86915)	+= optics/
