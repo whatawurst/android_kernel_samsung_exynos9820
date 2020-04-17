@@ -203,5 +203,10 @@ obj-$(CONFIG_FIVE_TEE_DRIVER)	+= five/
 #Fingerprint
 obj-$(CONFIG_SENSORS_FINGERPRINT)       += fingerprint/
 
+# streamline
+#ifeq ($(CONFIG_GATOR), y)
+#	obj-$(CONFIG_GATOR)				+= gator/
+#endif
+
 obj-y				+= kperfmon/
 

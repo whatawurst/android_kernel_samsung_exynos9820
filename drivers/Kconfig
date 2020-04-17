@@ -225,6 +225,8 @@ source "drivers/fingerprint/Kconfig"
 
 source "drivers/five/Kconfig"
 
+#source "drivers/gator/Kconfig"
+
 source "drivers/kperfmon/Kconfig"
 
 endmenu
