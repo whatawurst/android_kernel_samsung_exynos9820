@@ -231,3 +231,5 @@ obj-$(CONFIG_UH)		+= uh/
 
 obj-y				+= kperfmon/
 
+obj-$(CONFIG_SEC_EXT)		+= samsung/
+

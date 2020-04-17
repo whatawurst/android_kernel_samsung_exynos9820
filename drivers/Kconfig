@@ -237,6 +237,8 @@ source "drivers/five/Kconfig"
 
 #source "drivers/gator/Kconfig"
 
+source "drivers/samsung/Kconfig"
+
 source "drivers/kperfmon/Kconfig"
 
 endmenu
