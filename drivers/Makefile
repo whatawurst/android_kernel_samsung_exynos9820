@@ -190,6 +190,9 @@ obj-y	+= ccic/
 
 obj-$(CONFIG_EXYNOS_BTS)	+= bts/
 
+# FIVE TEE driver
+obj-$(CONFIG_FIVE_TEE_DRIVER)	+= five/
+
 #Fingerprint
 obj-$(CONFIG_SENSORS_FINGERPRINT)       += fingerprint/
 

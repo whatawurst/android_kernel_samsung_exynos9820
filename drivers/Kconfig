@@ -217,4 +217,6 @@ source "drivers/bts/Kconfig"
 
 source "drivers/fingerprint/Kconfig"
 
+source "drivers/five/Kconfig"
+
 endmenu
