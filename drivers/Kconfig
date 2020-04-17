@@ -25,6 +25,8 @@ source "drivers/nvme/Kconfig"
 
 source "drivers/misc/Kconfig"
 
+source "drivers/ifconn/Kconfig"
+
 source "drivers/ide/Kconfig"
 
 source "drivers/scsi/Kconfig"
