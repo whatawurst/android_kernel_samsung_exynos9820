@@ -195,6 +195,9 @@ obj-$(CONFIG_MULTIPLEXER)	+= mux/
 # CCIC
 obj-y	+= ccic/
 
+# COMBO REDRIVER
+obj-$(CONFIG_COMBO_REDRIVER_PTN36502)	+= redriver/
+
 obj-$(CONFIG_EXYNOS_BTS)	+= bts/
 
 # FIVE TEE driver

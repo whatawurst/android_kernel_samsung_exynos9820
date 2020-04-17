@@ -219,6 +219,8 @@ source "drivers/mux/Kconfig"
 
 source "drivers/ccic/Kconfig"
 
+source "drivers/redriver/Kconfig"
+
 source "drivers/bts/Kconfig"
 
 source "drivers/optics/Kconfig"
