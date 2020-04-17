@@ -211,6 +211,8 @@ source "drivers/tee/Kconfig"
 
 source "drivers/mux/Kconfig"
 
+source "drivers/bts/Kconfig"
+
 source "drivers/fingerprint/Kconfig"
 
 endmenu
