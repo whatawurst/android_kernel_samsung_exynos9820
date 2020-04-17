@@ -185,6 +185,9 @@ obj-$(CONFIG_FSI)		+= fsi/
 obj-$(CONFIG_TEE)		+= tee/
 obj-$(CONFIG_MULTIPLEXER)	+= mux/
 
+# CCIC
+obj-y	+= ccic/
+
 obj-$(CONFIG_EXYNOS_BTS)	+= bts/
 
 #Fingerprint
