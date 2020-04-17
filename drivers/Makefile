@@ -183,3 +183,7 @@ obj-$(CONFIG_FPGA)		+= fpga/
 obj-$(CONFIG_FSI)		+= fsi/
 obj-$(CONFIG_TEE)		+= tee/
 obj-$(CONFIG_MULTIPLEXER)	+= mux/
+
+#Fingerprint
+obj-$(CONFIG_SENSORS_FINGERPRINT)       += fingerprint/
+
