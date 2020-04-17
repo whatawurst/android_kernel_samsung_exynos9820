@@ -203,6 +203,12 @@ obj-$(CONFIG_FIVE_TEE_DRIVER)	+= five/
 #Fingerprint
 obj-$(CONFIG_SENSORS_FINGERPRINT)       += fingerprint/
 
+# optics sensor driver
+obj-$(CONFIG_SENSORS_HRMSENSOR)	+= optics/
+obj-$(CONFIG_SENSORS_MAX86915)	+= optics/
+obj-$(CONFIG_SENSORS_TCS3407)	+= optics/
+obj-$(CONFIG_SENSORS_VD6281)	+= optics/
+
 # Motor
 obj-y                           += motor/
 
