@@ -221,6 +221,8 @@ source "drivers/ccic/Kconfig"
 
 source "drivers/bts/Kconfig"
 
+source "drivers/motor/Kconfig"
+
 source "drivers/fingerprint/Kconfig"
 
 source "drivers/five/Kconfig"

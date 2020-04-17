@@ -203,6 +203,9 @@ obj-$(CONFIG_FIVE_TEE_DRIVER)	+= five/
 #Fingerprint
 obj-$(CONFIG_SENSORS_FINGERPRINT)       += fingerprint/
 
+# Motor
+obj-y                           += motor/
+
 # streamline
 #ifeq ($(CONFIG_GATOR), y)
 #	obj-$(CONFIG_GATOR)				+= gator/
