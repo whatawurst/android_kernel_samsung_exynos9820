@@ -205,6 +205,14 @@ config INPUT_KEYCOMBO
 	---help---
 	  Say Y here if you want to take action when some keys are pressed;
 
+config TOUCHSCREEN_DUMP_MODE
+	bool "touchscreen dump mode"
+	depends on I2C
+	help
+	  Say Y here if you need to get raw data.
+	  
+	  If unsure, say N.
+
 comment "Input Device Drivers"
 
 source "drivers/input/keyboard/Kconfig"
