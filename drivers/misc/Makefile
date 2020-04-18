@@ -63,6 +63,9 @@ obj-$(CONFIG_SEC_SIPC_MODEM_IF) += modem_v1/
 obj-$(CONFIG_SEC_SIPC_DUAL_MODEM_IF) += modem_v1_dual/
 obj-$(CONFIG_MEMORY_STATE_TIME)	+= memory_state_time.o
 
+# TEEGRIS kernel driver
+ccflags-$(CONFIG_TZDEV) += -I$(srctree)/drivers/misc/tzdev/include
+obj-$(CONFIG_TZDEV)		+= tzdev/
 obj-$(CONFIG_SAMSUNG_TUI)	+= tui/
 
 lkdtm-$(CONFIG_LKDTM)		+= lkdtm_core.o
