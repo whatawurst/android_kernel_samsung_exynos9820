@@ -794,6 +794,12 @@ config GPIO_PCA953X_IRQ
 	  Say yes here to enable the pca953x to be used as an interrupt
 	  controller. It requires the driver to be built in the kernel.
 
+config GPIO_PCAL6524
+	bool "PCAL6524 GPIO expander"
+	depends on I2C
+	help
+	  GPIO driver for PCAL6524 I2C-based GPIO expander.
+
 config GPIO_PCF857X
 	tristate "PCF857x, PCA{85,96}7x, and MAX732[89] I2C GPIO expanders"
 	select GPIOLIB_IRQCHIP
