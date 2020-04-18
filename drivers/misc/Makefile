@@ -60,6 +60,7 @@ obj-$(CONFIG_PCI_ENDPOINT_TEST)	+= pci_endpoint_test.o
 obj-$(CONFIG_UID_SYS_STATS)	+= uid_sys_stats.o
 obj-$(CONFIG_MCU_IPC)           += mcu_ipc/
 obj-$(CONFIG_SEC_SIPC_MODEM_IF) += modem_v1/
+obj-$(CONFIG_SEC_SIPC_DUAL_MODEM_IF) += modem_v1_dual/
 obj-$(CONFIG_MEMORY_STATE_TIME)	+= memory_state_time.o
 
 lkdtm-$(CONFIG_LKDTM)		+= lkdtm_core.o
