@@ -542,5 +542,6 @@ source "drivers/misc/cxl/Kconfig"
 source "drivers/misc/mcu_ipc/Kconfig"
 source "drivers/misc/modem_v1/Kconfig"
 source "drivers/misc/modem_v1_dual/Kconfig"
+source "drivers/misc/tui/Kconfig"
 source "drivers/misc/dev_ril_bridge/Kconfig"
 endmenu

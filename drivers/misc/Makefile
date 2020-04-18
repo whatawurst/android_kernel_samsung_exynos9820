@@ -63,6 +63,8 @@ obj-$(CONFIG_SEC_SIPC_MODEM_IF) += modem_v1/
 obj-$(CONFIG_SEC_SIPC_DUAL_MODEM_IF) += modem_v1_dual/
 obj-$(CONFIG_MEMORY_STATE_TIME)	+= memory_state_time.o
 
+obj-$(CONFIG_SAMSUNG_TUI)	+= tui/
+
 lkdtm-$(CONFIG_LKDTM)		+= lkdtm_core.o
 lkdtm-$(CONFIG_LKDTM)		+= lkdtm_bugs.o
 lkdtm-$(CONFIG_LKDTM)		+= lkdtm_heap.o
