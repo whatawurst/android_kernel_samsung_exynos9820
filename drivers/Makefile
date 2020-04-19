@@ -203,6 +203,7 @@ obj-$(CONFIG_EXYNOS_BTS)	+= bts/
 
 # FIVE TEE driver
 obj-$(CONFIG_FIVE_TEE_DRIVER)	+= five/
+obj-$(CONFIG_ICD)		+= security/samsung/icdrv/
 
 # vision driver
 obj-$(CONFIG_VISION_SUPPORT)	+= vision/
