@@ -37,3 +37,11 @@ obj-$(CONFIG_INTEGRITY)			+= integrity/
 
 # MST driver
 obj-$(CONFIG_MST_LDO)	  += mstdrv/
+
+# PROCA module
+subdir-$(CONFIG_PROCA)		+= proca
+obj-$(CONFIG_PROCA)		+= proca/
+
+# Kbuild should always enter proca/gaf because gaf should be always built
+subdir-y += proca/gaf
+obj-y    += proca/gaf/

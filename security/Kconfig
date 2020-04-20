@@ -236,6 +236,7 @@ source security/mstdrv/Kconfig
 
 source security/integrity/Kconfig
 source security/samsung/defex_lsm/Kconfig
+source security/proca/Kconfig
 source security/samsung/dsms/Kconfig
 
 choice
