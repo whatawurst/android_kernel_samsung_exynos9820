@@ -234,6 +234,7 @@ source security/loadpin/Kconfig
 source security/yama/Kconfig
 
 source security/integrity/Kconfig
+source security/samsung/defex_lsm/Kconfig
 
 choice
 	prompt "Default security module"
