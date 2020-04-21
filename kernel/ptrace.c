@@ -29,7 +29,7 @@
 #include <linux/hw_breakpoint.h>
 #include <linux/cn_proc.h>
 #include <linux/compat.h>
-#include <linux/sched/signal.h>
+#include <linux/task_integrity.h>
 
 /*
  * Access another process' address space via ptrace.
@@ -1155,6 +1155,7 @@ SYSCALL_DEFINE4(ptrace, long, request, long, pid, unsigned long, addr,
 	long ret;
 
 	if (request == PTRACE_TRACEME) {
+		five_ptrace(current, request);
 		ret = ptrace_traceme();
 		if (!ret)
 			arch_ptrace_attach(current);
@@ -1166,6 +1167,8 @@ SYSCALL_DEFINE4(ptrace, long, request, long, pid, unsigned long, addr,
 		ret = PTR_ERR(child);
 		goto out;
 	}
+
+	five_ptrace(child, request);
 
 	if (request == PTRACE_ATTACH || request == PTRACE_SEIZE) {
 		ret = ptrace_attach(child, request, addr, data);
@@ -1304,6 +1307,7 @@ COMPAT_SYSCALL_DEFINE4(ptrace, compat_long_t, request, compat_long_t, pid,
 	long ret;
 
 	if (request == PTRACE_TRACEME) {
+		five_ptrace(current, request);
 		ret = ptrace_traceme();
 		goto out;
 	}
@@ -1313,6 +1317,8 @@ COMPAT_SYSCALL_DEFINE4(ptrace, compat_long_t, request, compat_long_t, pid,
 		ret = PTR_ERR(child);
 		goto out;
 	}
+
+	five_ptrace(child, request);
 
 	if (request == PTRACE_ATTACH || request == PTRACE_SEIZE) {
 		ret = ptrace_attach(child, request, addr, data);
