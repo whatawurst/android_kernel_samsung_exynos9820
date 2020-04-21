@@ -243,6 +243,9 @@ source "net/switchdev/Kconfig"
 source "net/l3mdev/Kconfig"
 source "net/qrtr/Kconfig"
 source "net/ncsi/Kconfig"
+# KNOX NPA - START
+source "net/ncm/Kconfig"
+# KNOX NPA - END
 
 config RPS
 	bool
