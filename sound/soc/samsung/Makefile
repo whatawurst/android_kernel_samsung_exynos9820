@@ -17,6 +17,7 @@ obj-$(CONFIG_SND_SAMSUNG_SPDIF) += snd-soc-samsung-spdif.o
 obj-$(CONFIG_SND_SAMSUNG_PCM) += snd-soc-pcm.o
 obj-$(CONFIG_SND_SAMSUNG_I2S) += snd-soc-i2s.o
 obj-$(CONFIG_SND_SAMSUNG_I2S) += snd-soc-idma.o
+obj-$(CONFIG_SND_SOC_SAMSUNG_VTS) += vts/
 obj-$(CONFIG_SND_SOC_SAMSUNG_ABOX) += abox/
 
 # S3C24XX Machine Support
