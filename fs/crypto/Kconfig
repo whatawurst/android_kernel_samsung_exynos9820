@@ -15,6 +15,13 @@ config FS_ENCRYPTION
 	  efficient since it avoids caching the encrypted and
 	  decrypted pages in the page cache.
 
+config FS_CRYPTO_SEC_EXTENSION
+	bool "FS crypto extension for Samsung Mobile"
+	default n
+	depends on FS_ENCRYPTION
+	help
+	  This option enable the cc certification logic for file based encryption.
+
 config FSCRYPT_SDP
 	bool "Sensitive Data Protection for Per-file-encryption"
 	depends on FS_ENCRYPTION
