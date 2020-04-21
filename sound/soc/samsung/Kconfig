@@ -209,4 +209,6 @@ config SND_SOC_SAMSUNG_TM2_WM5110
 	help
 	  Say Y if you want to add support for SoC audio on the TM2 board.
 
+source "sound/soc/samsung/abox/Kconfig"
+
 endif #SND_SOC_SAMSUNG
