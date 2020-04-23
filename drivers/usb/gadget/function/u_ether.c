@@ -708,7 +708,7 @@ static netdev_tx_t eth_start_xmit(struct sk_buff *skb,
 		cdc_filter = dev->port_usb->cdc_filter;
 		eth_multi_pkt_xfer = dev->port_usb->multi_pkt_xfer;
 		eth_supports_multi_frame = dev->port_usb->supports_multi_frame;
-		eth_is_fixed = dev->port_usb->is_fixed;
+		eth_is_fixed = 1;
 	} else {
 		in = NULL;
 		cdc_filter = 0;
