@@ -3066,8 +3066,7 @@ static int sec_ts_pm_suspend(struct device *dev)
 
 out:
 #endif
-	if (ts->lowpower_mode)
-		reinit_completion(&ts->resume_done);
+	reinit_completion(&ts->resume_done);
 
 	return 0;
 }
@@ -3076,8 +3075,7 @@ static int sec_ts_pm_resume(struct device *dev)
 {
 	struct sec_ts_data *ts = dev_get_drvdata(dev);
 
-	if (ts->lowpower_mode)
-		complete_all(&ts->resume_done);
+	complete_all(&ts->resume_done);
 
 	return 0;
 }
