@@ -667,16 +667,16 @@ static int __maybe_unused xhci_plat_resume(struct device *dev)
 	pr_info("[%s] \n",__func__);
 
 	/*
-	 *if (!device_may_wakeup(dev) && !IS_ERR(xhci->clk))
-	 *	clk_prepare_enable(xhci->clk);
-	 *
-	 *ret = xhci_priv_resume_quirk(hcd);
-	 *if (ret)
-	 *	return ret;
-	 *
-	 *return xhci_resume(xhci, 0);
-	 */
-	 return 0;
+	*ret = xhci_resume(xhci, 0);
+	*if (ret)
+	*	return ret;
+	*
+	*pm_runtime_disable(dev);
+	*pm_runtime_set_active(dev);
+	*pm_runtime_enable(dev);
+	*/
+
+	return 0;
 }
 
 static int __maybe_unused xhci_plat_runtime_suspend(struct device *dev)
