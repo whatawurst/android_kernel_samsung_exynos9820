@@ -6,39 +6,39 @@ ifdef CONFIG_SOC_EXYNOS9820
   ifdef CONFIG_MACH_SAMSUNG_BEYOND0LTE
 
     dtbo-y += samsung/exynos9820-beyond0lte_eur_open_17.dtbo
-    dtbo-y += samsung/exynos9820-beyond0lte_eur_open_24.dtbo
-    dtbo-y += samsung/exynos9820-beyond0lte_eur_open_19.dtbo
-    dtbo-y += samsung/exynos9820-beyond0lte_eur_open_25.dtbo
-    dtbo-y += samsung/exynos9820-beyond0lte_eur_open_20.dtbo
     dtbo-y += samsung/exynos9820-beyond0lte_eur_open_18.dtbo
+    dtbo-y += samsung/exynos9820-beyond0lte_eur_open_19.dtbo
+    dtbo-y += samsung/exynos9820-beyond0lte_eur_open_20.dtbo
     dtbo-y += samsung/exynos9820-beyond0lte_eur_open_22.dtbo
+    dtbo-y += samsung/exynos9820-beyond0lte_eur_open_24.dtbo
+    dtbo-y += samsung/exynos9820-beyond0lte_eur_open_25.dtbo
 
   endif
   ifdef CONFIG_MACH_SAMSUNG_BEYOND1LTE
 
-    dtbo-y += samsung/exynos9820-beyond1lte_eur_open_22.dtbo
-    dtbo-y += samsung/exynos9820-beyond1lte_eur_open_18.dtbo
     dtbo-y += samsung/exynos9820-beyond1lte_eur_open_17.dtbo
-    dtbo-y += samsung/exynos9820-beyond1lte_eur_open_23.dtbo
-    dtbo-y += samsung/exynos9820-beyond1lte_eur_open_20.dtbo
-    dtbo-y += samsung/exynos9820-beyond1lte_eur_open_24.dtbo
-    dtbo-y += samsung/exynos9820-beyond1lte_eur_open_21.dtbo
-    dtbo-y += samsung/exynos9820-beyond1lte_eur_open_26.dtbo
+    dtbo-y += samsung/exynos9820-beyond1lte_eur_open_18.dtbo
     dtbo-y += samsung/exynos9820-beyond1lte_eur_open_19.dtbo
+    dtbo-y += samsung/exynos9820-beyond1lte_eur_open_20.dtbo
+    dtbo-y += samsung/exynos9820-beyond1lte_eur_open_21.dtbo
+    dtbo-y += samsung/exynos9820-beyond1lte_eur_open_22.dtbo
+    dtbo-y += samsung/exynos9820-beyond1lte_eur_open_23.dtbo
+    dtbo-y += samsung/exynos9820-beyond1lte_eur_open_24.dtbo
+    dtbo-y += samsung/exynos9820-beyond1lte_eur_open_26.dtbo
 
   endif
   ifdef CONFIG_MACH_SAMSUNG_BEYOND2LTE
 
-    dtbo-y += samsung/exynos9820-beyond2lte_eur_open_26.dtbo
-    dtbo-y += samsung/exynos9820-beyond2lte_eur_open_17.dtbo
-    dtbo-y += samsung/exynos9820-beyond2lte_eur_open_18.dtbo
-    dtbo-y += samsung/exynos9820-beyond2lte_eur_open_20.dtbo
-    dtbo-y += samsung/exynos9820-beyond2lte_eur_open_25.dtbo
-    dtbo-y += samsung/exynos9820-beyond2lte_eur_open_23.dtbo
-    dtbo-y += samsung/exynos9820-beyond2lte_eur_open_24.dtbo
     dtbo-y += samsung/exynos9820-beyond2lte_eur_open_04.dtbo
     dtbo-y += samsung/exynos9820-beyond2lte_eur_open_16.dtbo
+    dtbo-y += samsung/exynos9820-beyond2lte_eur_open_17.dtbo
+    dtbo-y += samsung/exynos9820-beyond2lte_eur_open_18.dtbo
     dtbo-y += samsung/exynos9820-beyond2lte_eur_open_19.dtbo
+    dtbo-y += samsung/exynos9820-beyond2lte_eur_open_20.dtbo
+    dtbo-y += samsung/exynos9820-beyond2lte_eur_open_23.dtbo
+    dtbo-y += samsung/exynos9820-beyond2lte_eur_open_24.dtbo
+    dtbo-y += samsung/exynos9820-beyond2lte_eur_open_25.dtbo
+    dtbo-y += samsung/exynos9820-beyond2lte_eur_open_26.dtbo
 
   endif
 

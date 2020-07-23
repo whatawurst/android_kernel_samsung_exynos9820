@@ -2001,9 +2001,11 @@ int sec_ts_set_custom_library(struct sec_ts_data *ts)
 	if (!ts->use_sponge)
 		return 0;
 
-	/* enable FOD when supported by device */
-	if (ts->plat_data->support_fod)
+#ifdef CONFIG_SEC_FACTORY
+	/* enable FOD when LCD on state */
+	if (ts->plat_data->support_fod && ts->input_closed == false)
 		force_fod_enable = SEC_TS_MODE_SPONGE_PRESS;
+#endif
 
 	input_err(true, &ts->client->dev, "%s: Sponge (0x%02x)%s\n",
 			__func__, ts->lowpower_mode,
@@ -3066,8 +3068,7 @@ static int sec_ts_pm_suspend(struct device *dev)
 
 out:
 #endif
-	if (ts->lowpower_mode)
-		reinit_completion(&ts->resume_done);
+	reinit_completion(&ts->resume_done);
 
 	return 0;
 }
@@ -3076,8 +3077,7 @@ static int sec_ts_pm_resume(struct device *dev)
 {
 	struct sec_ts_data *ts = dev_get_drvdata(dev);
 
-	if (ts->lowpower_mode)
-		complete_all(&ts->resume_done);
+	complete_all(&ts->resume_done);
 
 	return 0;
 }
