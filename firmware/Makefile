@@ -238,6 +238,3 @@ targets := $(patsubst $(obj)/%,%, \
 # Without this, built-in.o won't be created when it's empty, and the
 # final vmlinux link will fail.
 obj- := dummy
-
-# SPU signature verify
-obj-y += spu_verify/

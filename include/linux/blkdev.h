@@ -439,6 +439,7 @@ typedef void (blk_tw_try_off_fn) (struct request_queue *q);
 
 enum blk_tw_state{
 	TW_OFF = 0,
+	TW_ON_READY,
 	TW_OFF_READY,
 	TW_ON,
 
@@ -450,8 +451,14 @@ struct blk_turbo_write {
 	unsigned long		state_ts;
 
 	long long		up_threshold_bytes;
+	int			up_threshold_rqs;
 	long long		down_threshold_bytes;
-	int			off_delay_ms;		/* turbo write delayed off */
+	int			down_threshold_rqs;
+	int			on_delay;		/* delay for ON in jiffies */
+	int			off_delay;		/* delay for OFF in jiffies */
+
+	unsigned long		prev_on_ready_ts;	/* previous TW_ON_READY state timestamp */
+	int			on_interval;		/* TW_ON_READY interval for ON in jiffies */
 
 	blk_tw_try_on_fn	*try_on;
 	blk_tw_try_off_fn	*try_off;
@@ -469,16 +476,16 @@ void blk_free_turbo_write(struct request_queue *q);
 int blk_register_tw_try_on_fn(struct request_queue *q, blk_tw_try_on_fn *fn);
 int blk_register_tw_try_off_fn(struct request_queue *q, blk_tw_try_off_fn *fn);
 int blk_reset_tw_state(struct request_queue *q);
-void blk_update_tw_state(struct request_queue *q, long long write_bytes);
+void blk_update_tw_state(struct request_queue *q, int write_rqs, long long write_bytes);
 void blk_account_tw_io(struct request_queue *q, int opf, int bytes);
 #else
-#define blk_alloc_turbo_write(q)		do {} while (0)
-#define blk_free_turbo_write(q)			do {} while (0)
-#define blk_register_tw_enable_fn(q,fn)		do {} while (0)
-#define blk_register_tw_disable_fn(q,fn)	do {} while (0)
-#define blk_reset_tw_state(q)			do {} while (0)
-#define blk_update_tw_state(q,write_bytes)	do {} while (0)
-#define blk_account_tw_io(q,opf,bytes)		do {} while (0)
+#define blk_alloc_turbo_write(q)			do {} while (0)
+#define blk_free_turbo_write(q)				do {} while (0)
+#define blk_register_tw_enable_fn(q,fn)			do {} while (0)
+#define blk_register_tw_disable_fn(q,fn)		do {} while (0)
+#define blk_reset_tw_state(q)				do {} while (0)
+#define blk_update_tw_state(q,write_rqs,write_bytes)	do {} while (0)
+#define blk_account_tw_io(q,opf,bytes)			do {} while (0)
 #endif
 
 struct request_queue {
@@ -1109,6 +1116,19 @@ static inline struct request_queue *bdev_get_queue(struct block_device *bdev)
 }
 
 /*
+ * The basic unit of block I/O is a sector. It is used in a number of contexts
+ * in Linux (blk, bio, genhd). The size of one sector is 512 = 2**9
+ * bytes. Variables of type sector_t represent an offset or size that is a
+ * multiple of 512 bytes. Hence these two constants.
+ */
+#ifndef SECTOR_SHIFT
+#define SECTOR_SHIFT 9
+#endif
+#ifndef SECTOR_SIZE
+#define SECTOR_SIZE (1 << SECTOR_SHIFT)
+#endif
+
+/*
  * blk_rq_pos()			: the current sector
  * blk_rq_bytes()		: bytes left in the entire request
  * blk_rq_cur_bytes()		: bytes left in the current segment
@@ -1142,12 +1162,12 @@ extern unsigned int blk_rq_err_bytes(const struct request *rq);
 
 static inline unsigned int blk_rq_sectors(const struct request *rq)
 {
-	return blk_rq_bytes(rq) >> 9;
+	return blk_rq_bytes(rq) >> SECTOR_SHIFT;
 }
 
 static inline unsigned int blk_rq_cur_sectors(const struct request *rq)
 {
-	return blk_rq_cur_bytes(rq) >> 9;
+	return blk_rq_cur_bytes(rq) >> SECTOR_SHIFT;
 }
 
 /*
@@ -1167,7 +1187,8 @@ static inline unsigned int blk_queue_get_max_sectors(struct request_queue *q,
 						     int op)
 {
 	if (unlikely(op == REQ_OP_DISCARD || op == REQ_OP_SECURE_ERASE))
-		return min(q->limits.max_discard_sectors, UINT_MAX >> 9);
+		return min(q->limits.max_discard_sectors,
+			   UINT_MAX >> SECTOR_SHIFT);
 
 	if (unlikely(op == REQ_OP_WRITE_SAME))
 		return q->limits.max_write_same_sectors;
@@ -1476,16 +1497,21 @@ extern int blkdev_issue_zeroout(struct block_device *bdev, sector_t sector,
 static inline int sb_issue_discard(struct super_block *sb, sector_t block,
 		sector_t nr_blocks, gfp_t gfp_mask, unsigned long flags)
 {
-	return blkdev_issue_discard(sb->s_bdev, block << (sb->s_blocksize_bits - 9),
-				    nr_blocks << (sb->s_blocksize_bits - 9),
+	return blkdev_issue_discard(sb->s_bdev,
+				    block << (sb->s_blocksize_bits -
+					      SECTOR_SHIFT),
+				    nr_blocks << (sb->s_blocksize_bits -
+						  SECTOR_SHIFT),
 				    gfp_mask, flags);
 }
 static inline int sb_issue_zeroout(struct super_block *sb, sector_t block,
 		sector_t nr_blocks, gfp_t gfp_mask)
 {
 	return blkdev_issue_zeroout(sb->s_bdev,
-				    block << (sb->s_blocksize_bits - 9),
-				    nr_blocks << (sb->s_blocksize_bits - 9),
+				    block << (sb->s_blocksize_bits -
+					      SECTOR_SHIFT),
+				    nr_blocks << (sb->s_blocksize_bits -
+						  SECTOR_SHIFT),
 				    gfp_mask, 0);
 }
 
@@ -1592,7 +1618,8 @@ static inline int queue_alignment_offset(struct request_queue *q)
 static inline int queue_limit_alignment_offset(struct queue_limits *lim, sector_t sector)
 {
 	unsigned int granularity = max(lim->physical_block_size, lim->io_min);
-	unsigned int alignment = sector_div(sector, granularity >> 9) << 9;
+	unsigned int alignment = sector_div(sector, granularity >> SECTOR_SHIFT)
+		<< SECTOR_SHIFT;
 
 	return (granularity + lim->alignment_offset - alignment) % granularity;
 }
@@ -1626,8 +1653,8 @@ static inline int queue_limit_discard_alignment(struct queue_limits *lim, sector
 		return 0;
 
 	/* Why are these in bytes, not sectors? */
-	alignment = lim->discard_alignment >> 9;
-	granularity = lim->discard_granularity >> 9;
+	alignment = lim->discard_alignment >> SECTOR_SHIFT;
+	granularity = lim->discard_granularity >> SECTOR_SHIFT;
 	if (!granularity)
 		return 0;
 
@@ -1638,7 +1665,7 @@ static inline int queue_limit_discard_alignment(struct queue_limits *lim, sector
 	offset = (granularity + alignment - offset) % granularity;
 
 	/* Turn it back into bytes, gaah */
-	return offset << 9;
+	return offset << SECTOR_SHIFT;
 }
 
 static inline int bdev_discard_alignment(struct block_device *bdev)

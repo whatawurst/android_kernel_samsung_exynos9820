@@ -2344,9 +2344,9 @@ static int page_cache_read(struct file *file, pgoff_t offset, gfp_t gfp_mask)
 
 #define MMAP_LOTSAMISS  (100)
 #if CONFIG_MMAP_READAROUND_LIMIT == 0
-int mmap_readaround_limit = VM_MAX_READAHEAD;
+int mmap_readaround_limit = (VM_MAX_READAHEAD / 4); 		/* page */
 #else
-int mmap_readaround_limit = CONFIG_MMAP_READAROUND_LIMIT;
+int mmap_readaround_limit = CONFIG_MMAP_READAROUND_LIMIT;	/* page */
 #endif
 
 /*
@@ -2818,6 +2818,14 @@ filler:
 		unlock_page(page);
 		goto out;
 	}
+
+	/*
+	 * A previous I/O error may have been due to temporary
+	 * failures.
+	 * Clear page error before actual read, PG_error will be
+	 * set again if read page fails.
+	 */
+	ClearPageError(page);
 	goto filler;
 
 out:
