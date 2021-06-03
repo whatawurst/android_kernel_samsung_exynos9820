@@ -3,14 +3,14 @@ ifdef CONFIG_SOC_EXYNOS9820
 
   ifdef CONFIG_MACH_SAMSUNG_BEYOND0LTE
 
+    dtb-y += exynos/exynos9820.dtb
+    dtbo-y += samsung/exynos9820-beyond0lte_eur_open_24.dtbo
     dtbo-y += samsung/exynos9820-beyond0lte_eur_open_22.dtbo
+    dtbo-y += samsung/exynos9820-beyond0lte_eur_open_19.dtbo
     dtbo-y += samsung/exynos9820-beyond0lte_eur_open_18.dtbo
     dtbo-y += samsung/exynos9820-beyond0lte_eur_open_17.dtbo
-    dtbo-y += samsung/exynos9820-beyond0lte_eur_open_19.dtbo
-    dtbo-y += samsung/exynos9820-beyond0lte_eur_open_24.dtbo
-    dtbo-y += samsung/exynos9820-beyond0lte_eur_open_25.dtbo
     dtbo-y += samsung/exynos9820-beyond0lte_eur_open_20.dtbo
-    dtb-y += exynos/exynos9820.dtb
+    dtbo-y += samsung/exynos9820-beyond0lte_eur_open_25.dtbo
 
   endif
   ifdef CONFIG_MACH_SAMSUNG_BEYOND1LTE
