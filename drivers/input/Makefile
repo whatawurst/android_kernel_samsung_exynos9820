@@ -22,7 +22,9 @@ obj-$(CONFIG_INPUT_JOYDEV)	+= joydev.o
 obj-$(CONFIG_INPUT_EVDEV)	+= evdev.o
 obj-$(CONFIG_SEC_INPUT_BOOSTER)	+= input_booster.o
 obj-$(CONFIG_ARCH_QCOM)	+= input_booster_qc.o
-obj-$(CONFIG_ARCH_EXYNOS)	+= input_booster_lsi.o
+ifdef CONFIG_ARCH_EXYNOS
+obj-$(CONFIG_SEC_INPUT_BOOSTER)	+= input_booster_lsi.o
+endif
 obj-$(CONFIG_INPUT_EVBUG)	+= evbug.o
 
 obj-$(CONFIG_INPUT_KEYBOARD)	+= keyboard/
